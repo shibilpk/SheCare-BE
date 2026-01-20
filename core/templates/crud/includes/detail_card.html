@@ -1,0 +1,17 @@
+<div class="list-group lg-alt c-overflow col-md-4 mb-2">
+    <div class="list-group-item media">
+        <div class="media-body d-flex">
+            <div class="lgi-heading"><b>{{title}}:</b></div>
+            <span class="lgi-text ml-2">
+            {% if value.url and value.name %}
+                <a target="_blank" href="{{value.url}}">{{value.name|default:"-"}}</a>
+            {% else %}
+                {% if value.get_absolute_url %}
+                <a href="{{value.get_absolute_url}}"><i class="las la-external-link-alt font-15"></i></a>
+                {% endif %}
+                {{value|default:"-"}}
+            {% endif %}
+            </span>
+        </div>
+    </div>
+</div>

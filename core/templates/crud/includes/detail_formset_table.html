@@ -1,0 +1,73 @@
+{% load core_template_tags %}
+<div class="card">
+    <div class="card-header">
+        <div class="row align-items-center">
+            <div class="col">
+                <h4 class="card-title">{{ formset|get_model_verbose }}</h4>
+            </div>
+        </div>
+    </div>
+
+    <!--end row-->
+    <div class="card-body">
+        <div class="table-responsive">
+
+            <table class="table mb-0">
+                <thead class="thead-light">
+                    <tr>
+                        <th>Sl.no</th>
+                        {% if formset.list_display %}
+                            {% for field_name in formset.list_display %}
+                            <th>{{field_name|make_title}}</th>
+                            {% endfor %}
+                        {% else %}
+                            {% for key, field in formset.base_fields.items %}
+                            <th>{{field.label}}</th>
+                            {% endfor %}
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+
+                    {% for instance in instance|get_reverse_data:formset %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        {% if formset.list_display %}
+
+                            {% for field_name in formset.list_display %}
+                            <td>
+                                {% with value=instance|get_attr:field_name %}
+                                {% if value.get_absolute_url %}
+                                <a href="{{value.get_absolute_url}}"><i class="las la-external-link-alt font-15"></i></a>
+                                {% endif %}
+                                {{value}}
+                                {% endwith %}
+                            </td>
+                            {% endfor %}
+
+                        {% else %}
+
+                            {% for key, field in formset.base_fields.items %}
+                            <td>
+                                {% with value=instance|get_attr:key %}
+                                {% if value.get_absolute_url %}
+                                <a href="{{value.get_absolute_url}}"><i class="las la-external-link-alt font-15"></i></a>
+                                {% endif %}
+                                {{value}}
+                                {% endwith %}
+                            </th>
+                            {% endfor %}
+
+                        {% endif %}
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="100%" class="text-center">No Data Found</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <!--end table-responsive-->
+    </div>
+</div>

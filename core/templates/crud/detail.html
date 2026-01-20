@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% load static %}
+{% load i18n %}
+{% block content %}
+{% load core_template_tags %}
+<div class="row">
+    <div class="col-lg-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between">
+                <h4 class="card-title">Details</h4>
+
+                <div class="button-items text-right">
+                    {% for button in action_buttons %}
+                        {% if button.type == 'popup' %}
+                        <a href="javascript:void(0)" onclick="window.open(`{{ button.url }}`,'','width=600,height=600');" style="padding: 0.15rem .5rem;" class="btn btn-outline-primary btn-sm text-white">{{button.text}}</a>
+                        {% else %}
+                        <a href="{{ button.url }}" style="padding: 0.15rem .5rem;" class="btn btn-outline-primary btn-sm text-white">{{button.text}}</a>
+                        {% endif %}
+                    {% endfor %}
+                    <a href="{{ instance.get_create_url }}" class="btn btn-success btn-icon-square-sm"><i class="fas fa-plus"></i></a>
+                    {% if not instance.is_system_generated %}
+                    <a href="{{ instance.get_update_url }}" class="btn btn-warning btn-icon-square-sm"><i class="fas fa-pen"></i></a>
+                    <a href="{{ instance.get_destroy_url }}" data-id="{{ instance.pk }}" data-text="Are you sure you want to delete this Item?" data-title="Are you sure?" class="btn btn-danger btn-icon-square-sm action-button redirect"><i class="fas fa-trash-alt" title="Delete"></i></a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card-body">
+                <div class="row">
+                    {% for field in detail_display %}
+                        {% include "crud/includes/detail_card.html" with title=field|make_title value=instance|get_attr:field %}
+                    {% endfor %}
+                    {% for key, value in functional_display.items %}
+                        {% include "crud/includes/detail_card.html" with title=key|make_title value=value%}
+                    {% endfor %}
+                    {% if add_base_data %}
+                        {% with actor=instance.creator.username date=instance.date_added|date:datetime_format%}
+                            {% include "crud/includes/detail_card.html" with title="Created by"|make_title value=actor|format_actor_date:date %}
+                        {% endwith %}
+
+                        {% with actor=instance.updater.username date=instance.date_updated|date:datetime_format%}
+                            {% include "crud/includes/detail_card.html" with title="Updated by"|make_title value=actor|format_actor_date:date %}
+                        {% endwith %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% for formset in formsets %}
+            {% include "crud/includes/detail_formset_table.html" with formset=formset instance=instance %}
+        {% endfor %}
+        {% for template_name in extra_html_to_render %}
+            {% if template_name|check_type_html %}
+                {% include template_name %}
+            {% else %}
+                {% include "crud/includes/detail_formset_table.html" with formset=template_name instance=instance %}
+            {% endif %}
+        {% endfor %}
+    </div>
+</div>
+
+
+{% endblock %}

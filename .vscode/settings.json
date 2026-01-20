@@ -1,0 +1,9 @@
+{
+    "cSpell.words": [
+        "fernet"
+    ],
+    "autopep8.args": ["--max-line-length=79"],
+    "ruff.lineLength": 79,
+    "python.linting.pydocstyleEnabled": true,
+    "python.linting.enabled": true,
+}

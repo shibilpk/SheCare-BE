@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% load static %}
+{% load i18n %}
+{% block content %}
+{% load core_template_tags %}
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h4 class="card-title">{{title}}</h4>
+                    </div>
+
+                    <div class="col-auto">
+                        <div class="row g-2 align-items-center">
+                            <form role="search" action="." method="get">
+                                <input type="search" name="search" style="height: calc(1.8em + 0.26rem + 2px);" class="form-control top-search mb-0" placeholder="Search here..." value="{{filter.form.search.data|default_if_none:''}}">
+                            </form>
+                            {% if list_filter_class %}
+                            <button type="button" class="ml-2 btn btn-outline-primary btn-sm" id="id_filter_button"><i class="fas fa-filter me-2"></i>Filter</button>
+                            {% endif %}
+                            <a href="{{ instance_model.get_create_url }}" class="ml-2 btn btn-success btn-sm"><i class="fas fa-plus"></i></a>
+                        </div>
+                    </div>
+                    <!--end col-->
+                </div>
+                <!--end row-->
+            </div>
+
+
+            <div class="row" id="id_filter_container" {% if not filter.has_filter %}style="display: none;" {% endif %}>
+                <div class="col-lg-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title h5">Filter</div>
+                        </div>
+                        <div class="card-body">
+                            <form class=".">
+                                <div class="row">
+                                    {% for field in filter.form %}
+                                    <div class="col-md-3 {% if field.name in filter.hide_from_main %}hidden{% endif %}">
+                                        <div class="mb-3"><label for="{{field.id_for_label}}">{{field.label}}</label>
+                                            {{field}}
+                                            {% if field.help_text %}
+                                            <small class="form-text text-muted">{{field.help_text}}</small>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+
+                                <div class="mt-2 text-center">
+                                    <!-- <div class="custom-control custom-checkbox"><input type="checkbox" class="custom-control-input" id="InlineCheckbox" data-parsley-multiple="groups" data-parsley-mincheck="2"><label class="custom-control-label ms-1" for="InlineCheckbox">Check me out</label></div> -->
+                                    <button type="submit" class="me-1 btn btn-outline-primary btn-sm"><i class="mdi mdi-send me-2"></i> Submit</button>
+                                    <a href="{{request.path}}" class="btn btn-outline-danger btn-sm">Clear</a>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!--end card-header-->
+            <div class="card-body">
+                <div class="table-responsive">
+
+                    {% if instances %}
+                    {% include 'crud/includes/list_table.html' %}
+                    {% include 'includes/pagination.html' %}
+                    <table class="table">
+                        {% if summary_data %}
+                        <tfoot>
+                            <tr>
+                                <th colspan="2">Summary of {% if page_obj %}{{page_obj.count}}{% else %}{{page_obj.count}}{% endif %} item(s)</th>
+                                {% for field, value in summary_data.items %}
+                                <th>{{field|make_title}} : {{value}}</th>
+                                {% endfor %}
+                            </tr>
+                        </tfoot>
+                        {% endif %}
+                    </table>
+                    {% else %}
+                    {% include 'includes/not_found.html' %}
+                    {% endif %}
+
+                </div>
+                <!--end table-responsive-->
+            </div>
+            <!--end card-body-->
+        </div>
+        <!--end card-->
+    </div>
+    <!--end col-->
+</div>
+{% endblock %}
+{% block static %}
+{{filter.form.media }}
+<script>
+    $(document).ready(function () {
+        $("#id_filter_button").click(function () {
+            $("#id_filter_container").slideToggle();
+        });
+    });
+</script>
+{% endblock %}

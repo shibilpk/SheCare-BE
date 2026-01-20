@@ -1,0 +1,15 @@
+<div class="form-group">
+    <label for="{{ field.id_for_label }}" class="bmd-label-floating">
+        {{ field.label }}
+        {% if field.field.required %}
+        <small class="star">*</small>
+        {% endif %}
+    </label>
+    {{ field }}
+    {% if field.errors %}
+    <label class="error">{{ field.errors.as_text }}</label>
+    {% endif %}
+    {% if field.help_text %}
+    <small class="text-info">{{ field.help_text }}</small>
+    {% endif %}
+</div>
