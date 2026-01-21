@@ -74,7 +74,6 @@ class CustomerAPIController:
             UserOtp.create_email_otp(user.email)
 
         return 200, {
-            "state": 1,
             "message": "Registration successful. Please verify your email to activate your account.",
             "user_id": encrypt_small(user.id)
         }
@@ -95,7 +94,6 @@ class CustomerAPIController:
         user = request.user
         customer = user.customer
         return {
-            "state": 1,
             "profile": customer.get_profile_data(request)
         }
 
@@ -129,6 +127,5 @@ class CustomerAPIController:
             customer.save(update_fields=customer_dict.keys())
 
         return {
-            "state": 1,
             "profile": customer.get_profile_data(request)
         }

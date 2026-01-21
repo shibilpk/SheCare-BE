@@ -4,7 +4,7 @@ from ninja.errors import HttpError, AuthenticationError, ValidationError
 # Import controllers from all apps
 from accounts.apis.v1.controllers import AuthAPIController
 from customers.apis.v1.controllers import CustomerAPIController
-
+from general.apis.v1.controllers import GeneralAPIController
 
 # Create centralized API instance
 api = NinjaExtraAPI(
@@ -14,27 +14,31 @@ api = NinjaExtraAPI(
 )
 
 
-@api.exception_handler(ValidationError)
-def custom_validation_error_handler(request, exc):
-    """Custom handler for validation errors with state: 0 and field-based errors"""
-    errors = {}
-    error_list = exc.errors if isinstance(exc.errors, list) else exc.errors()
+# @api.exception_handler(ValidationError)
+# def custom_validation_error_handler(request, exc):
+#     """
+#     Custom handler for validation errors with state: 0
+#     and field-based errors
+#     """
 
-    for error in error_list:
-        field = error.get("loc", ["unknown"])[-1]
+#     errors = {}
+#     error_list = exc.errors if isinstance(exc.errors, list) else exc.errors()
 
-        if field not in errors:
-            errors[field] = []
+#     for error in error_list:
+#         field = error.get("loc", ["unknown"])[-1]
 
-        msg = error.get("msg", "")
+#         if field not in errors:
+#             errors[field] = []
 
-        errors[field].append(msg)
+#         msg = error.get("msg", "")
 
-    return api.create_response(
-        request,
-        {"state": 0, **errors},
-        status=400,
-    )
+#         errors[field].append(msg)
+
+#     return api.create_response(
+#         request,
+#         {"state": 0, **errors},
+#         status=400,
+#     )
 
 
 @api.exception_handler(AuthenticationError)
@@ -42,18 +46,17 @@ def custom_auth_error_handler(request, exc):
     """Custom handler for authentication errors"""
     return api.create_response(
         request,
-        {"state": 0, "detail": "Unauthorized"},
+        {"detail": "Unauthorized"},
         status=401,
     )
 
 
 @api.exception_handler(HttpError)
 def custom_http_error_handler(request, exc):
-    """Custom handler for HTTP errors to include state field"""
+    """Custom handler for HTTP errors"""
     return api.create_response(
         request,
-        {"state": 0, "detail": exc.message if hasattr(
-            exc, 'message') else str(exc)},
+        {"detail": exc.message if hasattr(exc, 'message') else str(exc)},
         status=exc.status_code,
     )
 
@@ -62,4 +65,5 @@ def custom_http_error_handler(request, exc):
 api.register_controllers(
     AuthAPIController,
     CustomerAPIController,
+    GeneralAPIController,
 )

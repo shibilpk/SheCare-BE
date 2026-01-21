@@ -1,22 +1,16 @@
-from django.contrib.auth import authenticate, get_user_model
+from django.conf import settings
+from django.contrib.auth import authenticate
+from ninja.errors import HttpError
 from ninja_extra import api_controller, http_post
 from ninja_jwt.tokens import RefreshToken
-from ninja.errors import HttpError, ValidationError
-from django.conf import settings
-from ninja import Form
 
 from accounts.models import User, UserOtp
 from core.helpers import decrypt_small
-from .schemas import (
-    EmailSchema,
-    LoginSchema,
-    RefreshTokenSchema,
-    TokenResponseSchema,
-    RefreshTokenResponseSchema,
-    VerifyTokenResponseSchema,
-    ErrorResponseSchema,
-    VerifyOTPSchema,
-)
+
+from accounts.apis.v1.schemas import (
+    EmailSchema, ErrorResponseSchema, LoginSchema, RefreshTokenResponseSchema,
+    RefreshTokenSchema, TokenResponseSchema, UserExistsResponseSchema, VerifyOTPSchema,
+    VerifyTokenResponseSchema)
 
 
 @api_controller('auth/', tags=['Authentication'])
@@ -67,7 +61,6 @@ class AuthAPIController:
             user_data["customer_id"] = user.customer.id
 
         return {
-            "state": 1,
             "access": str(refresh.access_token),
             "refresh": str(refresh),
             "user": user_data
@@ -143,7 +136,6 @@ class AuthAPIController:
             user_data["customer_id"] = user.customer.id
 
         return {
-            "state": 1,
             "access": str(refresh.access_token),
             "refresh": str(refresh),
             "user": user_data
@@ -171,13 +163,12 @@ class AuthAPIController:
                 refresh = RefreshToken.for_user(user)
 
             return {
-                "state": 1,
                 "access": str(refresh.access_token),
                 "refresh": str(refresh),
             }
         except User.DoesNotExist:
             raise HttpError(401, "User not found")
-        except Exception as e:
+        except Exception:
             raise HttpError(401, "Invalid or expired refresh token")
 
     @http_post(
@@ -193,13 +184,14 @@ class AuthAPIController:
 
         try:
             AccessToken(token)
-            return {"state": 1, "valid": True}
+            return {"valid": True}
         except Exception:
             raise HttpError(401, "Invalid or expired token")
 
     @http_post(
         'check-user/',
-        response={400: ErrorResponseSchema, 401: ErrorResponseSchema},
+        response={200: UserExistsResponseSchema,
+                  400: ErrorResponseSchema, 401: ErrorResponseSchema},
         auth=None
     )
     def check_user(self, request, payload: EmailSchema):
@@ -213,6 +205,5 @@ class AuthAPIController:
         except User.DoesNotExist:
             raise HttpError(400, "User with this email does not exist")
         return {
-            "state": 1,
-            "otp_login_allowed": True
+            "exists": True
         }

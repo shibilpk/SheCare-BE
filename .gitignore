@@ -1,0 +1,60 @@
+# Django
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+*.log
+*.pot
+*.pyc
+*.so
+*.mo
+*.swp
+*.swo
+*.egg-info/
+*.eggs/
+*.env
+.env*
+venv/
+ENV/
+env/
+
+# Media/static files
+/media/*
+!/media/static/
+!/media/static/**
+/static/
+
+# VS Code
+.vscode/
+
+# MacOS
+.DS_Store
+
+# Node
+node_modules/
+
+# Migrations
+**/migrations/*
+!**/migrations/__init__.py
+
+# Coverage
+htmlcov/
+.coverage
+.coverage.*
+.cache
+
+# Test
+nosetests.xml
+coverage.xml
+test-results/
+
+# Others
+*.bak
+*.tmp
+*.orig
+
+# Secret files
+secrets.json
+settings.ini

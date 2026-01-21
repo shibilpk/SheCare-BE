@@ -57,7 +57,6 @@ class EmailSchema(Schema, CustomMessageStr400Mixin):
 
 
 class TokenResponseSchema(Schema):
-    state: int = 1
     access: str
     refresh: str
     user: dict
@@ -78,18 +77,17 @@ class RefreshTokenSchema(Schema):
 
 
 class RefreshTokenResponseSchema(Schema):
-    state: int = 1
     access: str
     refresh: str
 
 
 class VerifyTokenResponseSchema(Schema):
-    state: int = 1
     valid: bool
 
+class UserExistsResponseSchema(Schema):
+    exists: bool
 
 class ErrorResponseSchema(Schema):
-    state: int = 0
     detail: str
 
 

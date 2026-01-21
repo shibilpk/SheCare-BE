@@ -8,8 +8,12 @@ django-ninja==1.5.1
 django-ninja-extra==0.30.8
 django-ninja-jwt==5.4.2
 django-phonenumber-field==8.0.0
+django-versatileimagefield==3.1
+dnspython==2.8.0
 email-validator==2.1.0
+idna==3.11
 injector==0.23.0
+phonenumbers==9.0.22
 pillow==12.0.0
 psycopg2==2.9.11
 pycparser==2.23
@@ -19,6 +23,7 @@ pydantic_core==2.41.5
 PyJWT==2.10.1
 python-decouple==3.8
 python-dotenv==1.2.1
+python-magic==0.4.27
 sqlparse==0.5.5
 typing-inspection==0.4.2
 typing_extensions==4.15.0

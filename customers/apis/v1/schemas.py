@@ -15,20 +15,17 @@ class CustomerRegistrationSchema(Schema):
 
 
 class CustomerRegistrationResponseSchema(Schema):
-    state: int = 1
     message: str
     user_id: str
 
 
 class TokenResponseSchema(Schema):
-    state: int = 1
     access: str
     refresh: str
     user: dict
 
 
 class ErrorResponseSchema(Schema):
-    state: int = 0
     detail: str
 
 
@@ -54,5 +51,4 @@ class CustomerProfileUpdateSchema(Schema):
 
 
 class CustomerProfileResponseSchema(Schema):
-    state: int = 1
     profile: CustomerProfileSchema
