@@ -1,5 +1,5 @@
-import uuid
-from django.db import IntegrityError, models
+from uuid6 import uuid7
+from django.db import models
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -57,6 +57,9 @@ class CrudUrlMixin:
 
 
 class BaseModel(models.Model):
+    id = models.UUIDField(
+        primary_key=True, editable=False, db_index=True, default=uuid7
+    )
     creator = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         blank=True,
@@ -75,8 +78,8 @@ class BaseModel(models.Model):
         limit_choices_to={"is_active": True},
         on_delete=models.CASCADE,
     )
-    date_added = models.DateTimeField(auto_now_add=True)
-    date_updated = models.DateTimeField(null=True, blank=True, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(null=True, blank=True, editable=False)
     is_deleted = models.BooleanField(default=False, editable=False)
 
     objects = models.Manager()
@@ -93,7 +96,7 @@ class BaseModel(models.Model):
         else:
             if request.user.is_authenticated:
                 self.updater = request.user
-            self.date_updated = timezone.now()
+            self.updated_at = timezone.now()
 
     def save(self, request=None, *args, **kwargs):
         request = RequestMiddleware(get_response=None)
@@ -112,27 +115,6 @@ class BaseModel(models.Model):
         else:
             self.is_deleted = True
             self.save()
-
-
-class UUIDBaseModel(BaseModel):
-    id = models.UUIDField(
-        primary_key=True, editable=False, db_index=True
-    )
-    auto_id = models.AutoField(editable=False, unique=True, db_index=True)
-
-    class Meta:
-        abstract = True
-        ordering = ("-auto_id",)
-
-    def save(self, request=None, *args, **kwargs):
-        if self._state.adding:
-            uid = uuid.uuid4()
-            try:
-                self.uid = uid
-            except IntegrityError:
-                uid = uuid.uuid4()
-                self.uid = uid
-        super().save(*args, **kwargs)
 
 
 class RelatedModal(models.Model):

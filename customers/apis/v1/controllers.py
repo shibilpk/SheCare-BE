@@ -5,17 +5,13 @@ from accounts.apis.v1.permissions import IsCustomer
 from accounts.models import User, UserOtp
 from core.helpers import encrypt_small
 from customers.models import Customer
-from django.contrib.auth import get_user_model
 from ninja_extra import api_controller, http_post, http_get, http_patch
-from ninja import Form, File, Body
-from ninja_jwt.tokens import RefreshToken
+from ninja import Form, File
 from ninja.errors import HttpError
 from .schemas import (
     CustomerProfileUpdateSchema,
     CustomerRegistrationResponseSchema,
     CustomerRegistrationSchema,
-    TokenResponseSchema,
-    ErrorResponseSchema,
     CustomerProfileResponseSchema
 )
 
@@ -28,8 +24,7 @@ class CustomerAPIController:
 
     @http_post(
         'register/',
-        response={200: CustomerRegistrationResponseSchema,
-                  400: ErrorResponseSchema},
+        response={200: CustomerRegistrationResponseSchema},
         auth=None,
     )
     def register(self, request, payload: CustomerRegistrationSchema):
@@ -74,16 +69,17 @@ class CustomerAPIController:
             UserOtp.create_email_otp(user.email)
 
         return 200, {
-            "message": "Registration successful. Please verify your email to activate your account.",
+            "detail": {
+                'title': 'Success',
+                'message': 'Please check your email to verify your account'
+            },
             "user_id": encrypt_small(user.id)
         }
-
-
 
     @http_get(
         'profile/',
         response={200: CustomerProfileResponseSchema,
-                  401: ErrorResponseSchema, 404: ErrorResponseSchema},
+                  },
         permissions=[IsCustomer]
 
     )
@@ -100,7 +96,7 @@ class CustomerAPIController:
     @http_patch(
         'profile/',
         response={200: CustomerProfileResponseSchema,
-                  401: ErrorResponseSchema, 400: ErrorResponseSchema}
+                  }
     )
     def profile_update(
         self, request, payload: CustomerProfileUpdateSchema = Form(...),

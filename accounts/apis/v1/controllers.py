@@ -3,14 +3,18 @@ from django.contrib.auth import authenticate
 from ninja.errors import HttpError
 from ninja_extra import api_controller, http_post
 from ninja_jwt.tokens import RefreshToken
+from ninja.responses import Response
+from core.exceptions import ApiError
+from starlette import status
 
 from accounts.models import User, UserOtp
 from core.helpers import decrypt_small
 
 from accounts.apis.v1.schemas import (
-    EmailSchema, ErrorResponseSchema, LoginSchema, RefreshTokenResponseSchema,
+    EmailSchema, LoginSchema, RefreshTokenResponseSchema,
     RefreshTokenSchema, TokenResponseSchema, UserExistsResponseSchema, VerifyOTPSchema,
     VerifyTokenResponseSchema)
+from general.apis.v1.schemas import ErrorSchema
 
 
 @api_controller('auth/', tags=['Authentication'])
@@ -21,8 +25,7 @@ class AuthAPIController:
 
     @http_post(
         'login/',
-        response={200: TokenResponseSchema,
-                  400: ErrorResponseSchema, 401: ErrorResponseSchema},
+        response={200: TokenResponseSchema, 400: ErrorSchema},
         auth=None
     )
     def login(self, request, payload: LoginSchema):
@@ -39,7 +42,11 @@ class AuthAPIController:
         )
 
         if user is None:
-            raise HttpError(401, "Invalid email or password")
+            raise ApiError(
+                title="Login failed",
+                message="Please enter valid email and password",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+            )
 
         # Check if user is active
         if not user.is_active:
@@ -63,13 +70,17 @@ class AuthAPIController:
         return {
             "access": str(refresh.access_token),
             "refresh": str(refresh),
-            "user": user_data
+            "user": user_data,
+            "detail": {
+                "title": "Success",
+                "message": "Login successful"
+            }
         }
 
     @http_post(
         'verify-otp/{str:user_id}/',
         response={200: TokenResponseSchema,
-                  400: ErrorResponseSchema, 401: ErrorResponseSchema},
+                  },
         auth=None
     )
     def verify_otp(self, request, user_id: str, payload: VerifyOTPSchema):
@@ -143,7 +154,7 @@ class AuthAPIController:
 
     @http_post(
         'refresh/',
-        response={200: RefreshTokenResponseSchema, 401: ErrorResponseSchema},
+        response={200: RefreshTokenResponseSchema, },
         auth=None
     )
     def refresh_token(self, request, payload: RefreshTokenSchema):
@@ -173,7 +184,7 @@ class AuthAPIController:
 
     @http_post(
         'verify-token/',
-        response={200: VerifyTokenResponseSchema, 401: ErrorResponseSchema},
+        response={200: VerifyTokenResponseSchema, },
         auth=None
     )
     def verify_token(self, request, token: str):
@@ -191,7 +202,7 @@ class AuthAPIController:
     @http_post(
         'check-user/',
         response={200: UserExistsResponseSchema,
-                  400: ErrorResponseSchema, 401: ErrorResponseSchema},
+                  },
         auth=None
     )
     def check_user(self, request, payload: EmailSchema):

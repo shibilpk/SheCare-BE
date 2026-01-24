@@ -34,11 +34,11 @@
                         {% include "crud/includes/detail_card.html" with title=key|make_title value=value%}
                     {% endfor %}
                     {% if add_base_data %}
-                        {% with actor=instance.creator.username date=instance.date_added|date:datetime_format%}
+                        {% with actor=instance.creator.username date=instance.created_at|date:datetime_format%}
                             {% include "crud/includes/detail_card.html" with title="Created by"|make_title value=actor|format_actor_date:date %}
                         {% endwith %}
 
-                        {% with actor=instance.updater.username date=instance.date_updated|date:datetime_format%}
+                        {% with actor=instance.updater.username date=instance.updated_at|date:datetime_format%}
                             {% include "crud/includes/detail_card.html" with title="Updated by"|make_title value=actor|format_actor_date:date %}
                         {% endwith %}
                     {% endif %}

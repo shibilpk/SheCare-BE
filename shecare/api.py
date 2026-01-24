@@ -1,8 +1,7 @@
 from ninja_extra import NinjaExtraAPI
 from ninja_jwt.authentication import JWTAuth
-from ninja.errors import HttpError, AuthenticationError, ValidationError
-# Import controllers from all apps
 from accounts.apis.v1.controllers import AuthAPIController
+from core.exceptions import ApiError
 from customers.apis.v1.controllers import CustomerAPIController
 from general.apis.v1.controllers import GeneralAPIController
 
@@ -13,6 +12,27 @@ api = NinjaExtraAPI(
     auth=JWTAuth(),
 )
 
+
+@api.exception_handler(ApiError)
+def api_error_handler(request, exc: ApiError):
+    # return Response(
+    #     status=exc.status_code,
+    #     data={
+    #         "detail": {
+    #             "title": exc.title,
+    #             "message": exc.message,
+    #         }
+    #     }
+    # )
+    return api.create_response(
+        request,
+        {
+            "detail": {
+                "title": exc.title,
+                "message": exc.message,
+            }},
+        status=exc.status_code,
+    )
 
 # @api.exception_handler(ValidationError)
 # def custom_validation_error_handler(request, exc):
@@ -41,24 +61,24 @@ api = NinjaExtraAPI(
 #     )
 
 
-@api.exception_handler(AuthenticationError)
-def custom_auth_error_handler(request, exc):
-    """Custom handler for authentication errors"""
-    return api.create_response(
-        request,
-        {"detail": "Unauthorized"},
-        status=401,
-    )
+# @api.exception_handler(AuthenticationError)
+# def custom_auth_error_handler(request, exc):
+#     """Custom handler for authentication errors"""
+#     return api.create_response(
+#         request,
+#         {"detail": "Unauthorized"},
+#         status=401,
+#     )
 
 
-@api.exception_handler(HttpError)
-def custom_http_error_handler(request, exc):
-    """Custom handler for HTTP errors"""
-    return api.create_response(
-        request,
-        {"detail": exc.message if hasattr(exc, 'message') else str(exc)},
-        status=exc.status_code,
-    )
+# @api.exception_handler(HttpError)
+# def custom_http_error_handler(request, exc):
+#     """Custom handler for HTTP errors"""
+#     return api.create_response(
+#         request,
+#         {"detail": exc.message if hasattr(exc, 'message') else str(exc)},
+#         status=exc.status_code,
+#     )
 
 
 # Register all controllers

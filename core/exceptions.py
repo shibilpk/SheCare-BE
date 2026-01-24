@@ -1,17 +1,5 @@
-from rest_framework.views import exception_handler
-from core.helpers import generate_serializer_errors
-
-def handler(exc, context):
-    """
-    TODO write the docs
-    TODO handle nested field errors
-    """
-    response = exception_handler(exc, context)
-
-    if response is None:
-        return response
-
-    message = generate_serializer_errors(response.data)
-
-    response.data['message'] = message
-    return response
+class ApiError(Exception):
+    def __init__(self, title: str, message: str, status_code: int):
+        self.title = title
+        self.message = message
+        self.status_code = status_code

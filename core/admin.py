@@ -22,8 +22,8 @@ class ListAdminMixin(object):
             or (isinstance(field, models.ForeignKey) and field.choices)
             or (isinstance(field, models.CharField) and field.choices)
         ]
-        self.date_hierarchy = 'date_added' if 'date_added' in fields else None
-        self.ordering = ['-date_added'] if 'date_added' in fields else []
+        self.date_hierarchy = 'created_at' if 'created_at' in fields else None
+        self.ordering = ['-created_at'] if 'created_at' in fields else []
 
         super(ListAdminMixin, self).__init__(model, admin_site)
 

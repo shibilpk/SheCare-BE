@@ -5,6 +5,8 @@ from pydantic import field_validator
 from ninja.files import UploadedFile
 from datetime import date
 
+from general.apis.v1.schemas import DetailsSuccessSchema
+
 
 class CustomerRegistrationSchema(Schema):
     email: EmailStr
@@ -15,7 +17,7 @@ class CustomerRegistrationSchema(Schema):
 
 
 class CustomerRegistrationResponseSchema(Schema):
-    message: str
+    detail: DetailsSuccessSchema
     user_id: str
 
 
@@ -23,10 +25,6 @@ class TokenResponseSchema(Schema):
     access: str
     refresh: str
     user: dict
-
-
-class ErrorResponseSchema(Schema):
-    detail: str
 
 
 class UserUpdateSchema(Schema):

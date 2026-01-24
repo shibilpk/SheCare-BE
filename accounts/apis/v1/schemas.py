@@ -5,6 +5,8 @@ from ninja import Schema
 from pydantic import EmailStr, model_validator, ValidationError
 from ninja.errors import HttpError
 
+from general.apis.v1.schemas import DetailsSuccessSchema
+
 
 class CustomMessageStr400Mixin:
     # Define as a class variable that subclasses can override
@@ -60,6 +62,7 @@ class TokenResponseSchema(Schema):
     access: str
     refresh: str
     user: dict
+    detail: DetailsSuccessSchema
 
 
 class RefreshTokenSchema(Schema):
@@ -84,11 +87,9 @@ class RefreshTokenResponseSchema(Schema):
 class VerifyTokenResponseSchema(Schema):
     valid: bool
 
+
 class UserExistsResponseSchema(Schema):
     exists: bool
-
-class ErrorResponseSchema(Schema):
-    detail: str
 
 
 class VerifyOTPSchema(Schema):

@@ -60,7 +60,7 @@ class UserOtp(models.Model):
     is_active = models.BooleanField(default=False)
     phone_number = PhoneNumberField(blank=True)
     email = models.EmailField(blank=True)
-    date_added = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return str(self.phone_number)

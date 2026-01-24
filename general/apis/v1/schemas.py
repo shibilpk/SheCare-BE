@@ -4,6 +4,15 @@ from ninja import Schema
 from typing import List
 
 
+class DetailsSuccessSchema(Schema):
+    title: str
+    message: str
+
+
+class ErrorSchema(Schema):
+    detail: DetailsSuccessSchema
+
+
 class AppVersionOutSchema(Schema):
     version: str
     min_version: str
@@ -11,7 +20,3 @@ class AppVersionOutSchema(Schema):
     force_update: bool
     download_url: str
     release_notes: List[str]
-
-
-class ErrorResponseSchema(Schema):
-    detail: str

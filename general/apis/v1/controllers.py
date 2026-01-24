@@ -1,7 +1,7 @@
 from ninja.errors import HttpError
 from ninja_extra import api_controller, http_get
 
-from general.apis.v1.schemas import AppVersionOutSchema, ErrorResponseSchema
+from general.apis.v1.schemas import AppVersionOutSchema
 from general.constants import OSTypeEnum
 from general.models import AppVersion
 
@@ -15,7 +15,7 @@ class GeneralAPIController:
     @http_get(
         'app-version/{os_type}/',
         response={200: AppVersionOutSchema,
-                  400: ErrorResponseSchema, 401: ErrorResponseSchema},
+                  },
         auth=None
     )
     def app_version(self, request, os_type: OSTypeEnum):
