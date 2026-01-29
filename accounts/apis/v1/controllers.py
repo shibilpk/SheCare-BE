@@ -149,7 +149,11 @@ class AuthAPIController:
         return {
             "access": str(refresh.access_token),
             "refresh": str(refresh),
-            "user": user_data
+            "user": user_data,
+            "detail": {
+                "title": "Success",
+                "message": "Successfully verified OTP"
+            }
         }
 
     @http_post(

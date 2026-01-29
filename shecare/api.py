@@ -2,7 +2,8 @@ from ninja_extra import NinjaExtraAPI
 from ninja_jwt.authentication import JWTAuth
 from accounts.apis.v1.controllers import AuthAPIController
 from core.exceptions import ApiError
-from customers.apis.v1.controllers import CustomerAPIController
+from customers.apis.v1.controllers import (
+    CustomerAPIController, CustomerOpenAPIController)
 from general.apis.v1.controllers import GeneralAPIController
 
 # Create centralized API instance
@@ -84,6 +85,7 @@ def api_error_handler(request, exc: ApiError):
 # Register all controllers
 api.register_controllers(
     AuthAPIController,
+    CustomerOpenAPIController,
     CustomerAPIController,
     GeneralAPIController,
 )

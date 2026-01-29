@@ -1,11 +1,19 @@
+from decimal import Decimal
 from ninja import Schema, Form, File
-from pydantic import EmailStr, Field
-from typing import Optional
+from pydantic import EmailStr, Field, StrictFloat
+from typing import List, Optional, Annotated
 from pydantic import field_validator
 from ninja.files import UploadedFile
 from datetime import date
+from pydantic import condecimal
 
+from customers.constants import WeightUnisChoices
 from general.apis.v1.schemas import DetailsSuccessSchema
+
+
+class WeightEntryOutSchema(Schema):
+    weight: Decimal
+    unit: str
 
 
 class CustomerRegistrationSchema(Schema):
@@ -39,14 +47,68 @@ class CustomerProfileSchema(Schema):
     photo: Optional[str] = None
     age: Optional[int] = None
     height: Optional[float] = None
-    weight: Optional[float] = None
+    weight: Optional[WeightEntryOutSchema] = None
+    date_of_birth: Optional[date] = None
 
 
 class CustomerProfileUpdateSchema(Schema):
     user: UserUpdateSchema = Field(..., alias="user")
     date_of_birth: Optional[date] = None
-    height: Optional[float] = None
+    height: Optional[Decimal] = Field(
+        None,
+        max_digits=5,
+        decimal_places=2,
+        ge=0  # 'ge' means Greater than or Equal to 0
+    )
+
+    # @field_validator("height")
+    # def height_must_be_real(cls, v):
+    #     if v is not None and (v != v):  # NaN check
+    #         raise ValueError("height must be a valid number")
+    #     return v
+
+    @field_validator('height', mode='before')
+    @classmethod
+    def allow_empty_string_as_none(cls, v):
+        if v == "":
+            return None
+        return v
 
 
 class CustomerProfileResponseSchema(Schema):
     profile: CustomerProfileSchema
+
+
+class CustomerProfileUpdateOutSchema(Schema):
+    profile: CustomerProfileSchema
+    detail: DetailsSuccessSchema
+
+
+class WeightEntryInSchema(Schema):
+    weight: Decimal = Field(
+        ...,
+        max_digits=5,
+        decimal_places=2,
+        ge=0  # 'ge' means Greater than or Equal to 0
+    )
+    weight_date: date
+    weight_unit: str
+
+    @field_validator('weight_unit')
+    @classmethod
+    def validate_units(cls, v):
+        valid_units = WeightUnisChoices.values
+        if v not in valid_units:
+            raise ValueError(f"units must be one of {valid_units}")
+        return v
+
+
+class BmiHealthSummaryOutSchema(Schema):
+    bmi: float
+    notes: List[str]
+    new_bmi: float
+    status: str
+
+
+class HealthAnalysisResponseSchema(Schema):
+    bmi: Optional[BmiHealthSummaryOutSchema] = None

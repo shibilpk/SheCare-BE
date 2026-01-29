@@ -1,45 +1,49 @@
-import os
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 import base64
+import calendar
+import collections
+import math
+import os
+import random
 import re
 import string
-import random
-import math
-import collections
-from django.utils import timezone
-from django.db.models import Max
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
+
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from django.conf import settings
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.core.exceptions import ImproperlyConfigured
+from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
+from django.db.models import Max
+from django.utils import timezone
 
 from .services import generate_errors
-from django.core.exceptions import ImproperlyConfigured
 
 
-def send_email(
-    to_address,
-    subject,
-    content,
-    html_content,
-    attachment=None,
-    attachment2=None,
-    attachment3=None,
-):
-    new_message = MailerMessage()
-    new_message.subject = subject
-    new_message.to_address = to_address
-    # if bcc_address:
-    #     new_message.bcc_address = bcc_address
-    new_message.from_address = settings.DEFAULT_FROM_EMAIL
-    new_message.content = content
-    new_message.html_content = html_content
-    if attachment:
-        new_message.add_attachment(attachment)
-    if attachment2:
-        new_message.add_attachment(attachment2)
-    if attachment3:
-        new_message.add_attachment(attachment3)
-    new_message.app = "default"
-    new_message.save()
+# def send_email(
+#     to_address,
+#     subject,
+#     content,
+#     html_content,
+#     attachment=None,
+#     attachment2=None,
+#     attachment3=None,
+# ):
+#     new_message = MailerMessage()
+#     new_message.subject = subject
+#     new_message.to_address = to_address
+#     # if bcc_address:
+#     #     new_message.bcc_address = bcc_address
+#     new_message.from_address = settings.DEFAULT_FROM_EMAIL
+#     new_message.content = content
+#     new_message.html_content = html_content
+#     if attachment:
+#         new_message.add_attachment(attachment)
+#     if attachment2:
+#         new_message.add_attachment(attachment2)
+#     if attachment3:
+#         new_message.add_attachment(attachment3)
+#     new_message.app = "default"
+#     new_message.save()
 
 
 def generate_unique_id(size=8, chars=string.ascii_lowercase + string.digits):
@@ -230,13 +234,15 @@ def transform_string(input_str):
     ):
         return f"{input_str[0]}_{input_str[1:].lower()}"
 
-    # Case 3: Contains any lowercase followed by uppercase (camelCase or PascalCase)
+    # Case 3: Contains any lowercase followed by uppercase
+    # (camelCase or PascalCase)
     if re.search(r"[a-z][A-Z]", input_str):
         # Insert separator before capital letters and make lowercase
         transformed = re.sub(r"([a-z])([A-Z])", r"\1-\2", input_str).lower()
         return transformed
 
-    # Default case: convert to lowercase with hyphens for any non-alphanumeric chars
+    # Default case: convert to lowercase with hyphens for any
+    # non-alphanumeric chars
     transformed = re.sub(r"[^a-zA-Z0-9]+", "-", input_str).lower()
     return transformed
 
@@ -264,3 +270,47 @@ def decrypt_small(token):
     nonce = data[:12]
     ciphertext = data[12:]
     return aesgcm.decrypt(nonce, ciphertext, None).decode("utf-8")
+
+
+def calculate_age(
+    date_of_birth: date | None,
+    *,
+    timezone: str = "UTC",
+    feb_29_policy: str = "feb28",  # "feb28" or "mar1"
+) -> int | None:
+    """
+    Calculate age from date_of_birth.
+
+    - Timezone-aware (uses the given IANA timezone)
+    - Handles Feb 29 birthdays
+    - Returns None if date_of_birth is None
+    """
+
+    if date_of_birth is None:
+        return None
+
+    tz = ZoneInfo(timezone)
+    today = datetime.now(tz).date()
+
+    # Determine effective birthday for the current year
+    if date_of_birth.month == 2 and date_of_birth.day == 29:
+        if calendar.isleap(today.year):
+            effective_birthday = date(today.year, 2, 29)
+        else:
+            if feb_29_policy == "mar1":
+                effective_birthday = date(today.year, 3, 1)
+            else:  # default: feb28
+                effective_birthday = date(today.year, 2, 28)
+    else:
+        effective_birthday = date(
+            today.year,
+            date_of_birth.month,
+            date_of_birth.day,
+        )
+
+    age = today.year - date_of_birth.year
+
+    if today < effective_birthday:
+        age -= 1
+
+    return age
