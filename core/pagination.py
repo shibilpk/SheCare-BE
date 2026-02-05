@@ -1,39 +1,56 @@
-from rest_framework.pagination import PageNumberPagination
-from rest_framework.response import Response
-from collections import OrderedDict, namedtuple
+from typing import List, Optional, Any, Generic
+from ninja import Schema
+from ninja_extra.pagination import PageNumberPaginationExtra
+from ninja_extra.schemas.response import Url, T
+from collections import OrderedDict
+from django.core.paginator import Page
+from ninja.types import DictStrAny
 
 
-class CustomPagination(PageNumberPagination):
+class BasePaginatedResponseSchema(Schema):
+    page_obj: DictStrAny
+    next: Optional[Url]
+    previous: Optional[Url]
+    results: List[Any]
+
+
+class PaginatedResponseSchema(BasePaginatedResponseSchema, Generic[T]):
+    results: List[T]
+
+
+class CustomPagination(PageNumberPaginationExtra):
     page_size = 10
     page_size_query_param = "page_size"
     max_page_size = 100
 
-
-    def get_paginated_response(self, data):
+    def get_paginated_response(
+        self, *, base_url: str, page: Page
+    ) -> DictStrAny:
+        paginator = page.paginator
 
         page_obj = {
-            'paginator':{}
+            "number": page.number,
+            "start_index": page.start_index(),
+            "has_other_pages": page.has_other_pages(),
+            "has_previous": page.has_previous(),
+            "has_next": page.has_next(),
+            "paginator": {
+                "num_pages": paginator.num_pages,
+                "count": paginator.count,
+            },
         }
 
-        page_obj['has_other_pages'] = self.page.has_other_pages()
-        page_obj['paginator']['num_pages'] = self.page.paginator.num_pages
-        page_obj['paginator']['count'] = self.page.paginator.count
-        page_obj['start_index'] = self.page.start_index()
-        page_obj['paginator']['page_range'] = list(self.page.paginator.page_range)
-        page_obj['number'] = self.page.number
+        if page.has_previous():
+            page_obj["previous_page_number"] = page.previous_page_number()
 
-        page_obj['has_previous'] = self.page.has_previous()
-        if self.page.has_previous():
-            page_obj['previous_page_number'] = self.page.previous_page_number()
+        if page.has_next():
+            page_obj["next_page_number"] = page.next_page_number()
 
-        page_obj['has_next'] = self.page.has_next()
-        if self.page.has_next():
-            page_obj['next_page_number'] = self.page.next_page_number()
-
-        return Response(OrderedDict([
-
-            ('page_obj', page_obj),
-            ('next', self.get_next_link()),
-            ('previous', self.get_previous_link()),
-            ('results', data)
-        ]))
+        return OrderedDict(
+            [
+                ("page_obj", page_obj),
+                ("next", self.get_next_link(base_url, page=page)),
+                ("previous", self.get_previous_link(base_url, page=page)),
+                ("results", list(page)),
+            ]
+        )

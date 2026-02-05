@@ -1,14 +1,18 @@
+from datetime import date
 from typing import Optional
 from ninja.files import UploadedFile
 from django.db import transaction
 from accounts.apis.v1.permissions import IsCustomer
 from accounts.models import User, UserOtp
 from core.helpers import encrypt_small
-from customers.models import Customer, WeightEntry
+from customers.models import Customer, CustomerDiaryEntry, WeightEntry
 from ninja_extra import api_controller, http_post, http_get, http_patch
 from ninja import Form, File
 from ninja.errors import HttpError
+
+from general.apis.v1.schemas import DetailsSuccessSchema, SuccessSchema
 from .schemas import (
+    CustomerDiaryEntryInOutSchema,
     CustomerProfileUpdateOutSchema,
     CustomerProfileUpdateSchema,
     CustomerRegistrationResponseSchema,
@@ -46,7 +50,6 @@ class CustomerOpenAPIController:
             if user:
                 # User exists but is inactive → replace data
                 user.first_name = payload.first_name
-                user.last_name = payload.last_name
                 user.username = email
             else:
                 # Create new inactive user
@@ -54,7 +57,6 @@ class CustomerOpenAPIController:
                     email=email,
                     username=email,
                     first_name=payload.first_name,
-                    last_name=payload.last_name,
                     is_active=False,
                 )
 
@@ -179,4 +181,63 @@ class CustomerAPIController:
         """
         user = request.user
         customer = user.customer
-        return {"bmi": customer.bmi}
+        return {
+            "bmi": customer.get_bmi_data(),
+            "profile": customer.get_profile_data(request),
+        }
+
+
+@api_controller("diary/", tags=["Diary"], permissions=[IsCustomer])
+class CustomerDiaryAPIController:
+
+    @http_post(
+        "entry/",
+        response={200: SuccessSchema},
+    )
+    def add_diary_entry(self, request, payload: CustomerDiaryEntryInOutSchema):
+        """
+        Add a diary weight entry for the authenticated customer
+        """
+        user = request.user
+        customer = user.customer
+
+        _, created = CustomerDiaryEntry.objects.update_or_create(
+            customer=customer,
+            entry_date=payload.entry_date,
+            defaults={"content": payload.content},
+
+        )
+        if not created:
+            message = "Diary entry updated successfully"
+        else:
+            message = "Diary entry added successfully"
+        return {
+            "detail": {
+                "title": "Success",
+                "message": message
+            }
+        }
+
+    @http_get(
+        "entry-by-date/",
+        response={200: CustomerDiaryEntryInOutSchema},
+    )
+    def get_diary_entry_by_date(self, request, entry_date: date):
+        """
+        Get a diary weight entry for the authenticated customer by date
+        """
+        user = request.user
+        customer = user.customer
+
+        diary_entry = CustomerDiaryEntry.objects.filter(
+            customer=customer,
+            entry_date=entry_date
+        ).first()
+
+        if not diary_entry:
+            raise HttpError(404, "Diary entry not found for the given date")
+
+        return {
+            "entry_date": diary_entry.entry_date,
+            "content": diary_entry.content
+        }

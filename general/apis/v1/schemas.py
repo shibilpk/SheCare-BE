@@ -13,6 +13,10 @@ class ErrorSchema(Schema):
     detail: DetailsSuccessSchema
 
 
+class SuccessSchema(Schema):
+    detail: DetailsSuccessSchema
+
+
 class AppVersionOutSchema(Schema):
     version: str
     min_version: str

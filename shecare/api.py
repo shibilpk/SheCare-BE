@@ -1,10 +1,7 @@
+from importlib import import_module
 from ninja_extra import NinjaExtraAPI
 from ninja_jwt.authentication import JWTAuth
-from accounts.apis.v1.controllers import AuthAPIController
 from core.exceptions import ApiError
-from customers.apis.v1.controllers import (
-    CustomerAPIController, CustomerOpenAPIController)
-from general.apis.v1.controllers import GeneralAPIController
 
 # Create centralized API instance
 api = NinjaExtraAPI(
@@ -82,10 +79,24 @@ def api_error_handler(request, exc: ApiError):
 #     )
 
 
-# Register all controllers
-api.register_controllers(
-    AuthAPIController,
-    CustomerOpenAPIController,
-    CustomerAPIController,
-    GeneralAPIController,
-)
+LOCAL_APPS = [
+    'accounts.apis.v1.api',
+    'customers.apis.v1.api',
+    'general.apis.v1.api',
+    'periods.apis.v1.api',
+]
+for app_path in LOCAL_APPS:
+    try:
+        # Dynamically import the app module
+        module = import_module(app_path)
+
+        # Look for the 'controllers' list we defined in step 2
+        if hasattr(module, 'register_controllers'):
+            api.register_controllers(*module.register_controllers)
+
+    except ImportError as e:
+        raise ImportError(
+            f"Could not import controllers from {app_path}: {e}")
+
+# extra_controllers = []
+# api.register_controllers(*extra_controllers)

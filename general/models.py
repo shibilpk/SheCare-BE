@@ -15,3 +15,19 @@ class AppVersion(models.Model):
 
     def __str__(self):
         return f"Version {self.version} released on {self.release_date}"
+
+
+class AppAdminSettings(models.Model):
+    no_avg_period_months = models.PositiveIntegerField(
+        default=6,
+        help_text=("Number of months to consider for average period "
+                   "calculations")
+    )
+
+    def __str__(self):
+        return "App Admin Settings"
+
+    @classmethod
+    def get_settings(cls):
+        settings = cls.objects.first()
+        return settings if settings else cls.objects.create()

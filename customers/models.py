@@ -4,7 +4,8 @@ from versatileimagefield.fields import VersatileImageField
 from django.core.validators import MinValueValidator, MaxValueValidator
 
 from accounts.models import User
-from core.helpers import calculate_age
+from core.helpers import normalize_number
+from customers.helpers import calculate_age
 from core.models import BaseModel, CrudUrlMixin, RelatedModal
 from datetime import date
 
@@ -13,7 +14,7 @@ from customers.helpers import bmi_health_summary
 
 
 def get_upload_path(instance, filename):
-    return f"static/{instance._meta.model_name}/{filename}"
+    return f"{instance._meta.model_name}/{filename}"
 
 
 class Customer(BaseModel, CrudUrlMixin):
@@ -58,7 +59,8 @@ class Customer(BaseModel, CrudUrlMixin):
             .first()
         )
         return {
-            'weight': latest.weight, 'unit': latest.unit} if latest else None
+            'weight': normalize_number(
+                latest.weight), 'unit': latest.unit} if latest else None
 
     def get_profile_data(self, request):
         return {
@@ -70,13 +72,12 @@ class Customer(BaseModel, CrudUrlMixin):
                 request.build_absolute_uri(self.photo.url)
                 if self.photo else None),
             "age": self.age,
-            "height": self.height,
+            "height": normalize_number(self.height, fx_place=1),
             "weight": self.weight,
             "date_of_birth": self.date_of_birth,
         }
 
-    @property
-    def bmi(self):
+    def get_bmi_data(self):
         weight = self.weight['weight']
         unit = self.weight['unit']
 
@@ -109,3 +110,20 @@ class WeightEntry(RelatedModal):
 
     class Meta:
         ordering = ['-entry_date', '-time_stamp']
+
+
+class CustomerDiaryEntry(BaseModel):
+    customer = models.ForeignKey(
+        Customer, on_delete=models.CASCADE, related_name="diary_entries"
+    )
+    entry_date = models.DateField()
+    content = models.TextField()
+
+    def __str__(self):
+        return "{} - Entry on {}".format(
+            self.customer.user.get_full_name(),
+            self.entry_date,
+        )
+
+    class Meta:
+        ordering = ['-entry_date']

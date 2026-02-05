@@ -20,7 +20,6 @@ class CustomerRegistrationSchema(Schema):
     email: EmailStr
     password: str = Field(..., min_length=6)
     first_name: str = Field(..., min_length=1)
-    last_name: Optional[str] = None
     phone: Optional[str] = None
 
 
@@ -37,7 +36,6 @@ class TokenResponseSchema(Schema):
 
 class UserUpdateSchema(Schema):
     first_name: Optional[str] = Field(None, alias="user.first_name")
-    last_name: Optional[str] = Field(None, alias="user.last_name")
 
 
 class CustomerProfileSchema(Schema):
@@ -108,7 +106,14 @@ class BmiHealthSummaryOutSchema(Schema):
     notes: List[str]
     new_bmi: float
     status: str
+    status_badge_color: str
 
 
 class HealthAnalysisResponseSchema(Schema):
     bmi: Optional[BmiHealthSummaryOutSchema] = None
+    profile: Optional[CustomerProfileSchema] = None
+
+
+class CustomerDiaryEntryInOutSchema(Schema):
+    entry_date: date
+    content: str

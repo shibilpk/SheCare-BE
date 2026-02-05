@@ -1,13 +1,12 @@
 import base64
-import calendar
 import collections
 import math
 import os
 import random
 import re
 import string
-from datetime import date, datetime
-from zoneinfo import ZoneInfo
+from decimal import ROUND_HALF_UP, Decimal
+from numbers import Number
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from django.conf import settings
@@ -17,7 +16,6 @@ from django.db.models import Max
 from django.utils import timezone
 
 from .services import generate_errors
-
 
 # def send_email(
 #     to_address,
@@ -185,10 +183,6 @@ def get_current_roles(user):
     return user_roles
 
 
-def to_fixed_two(value):
-    return format(value, ".2f")
-
-
 def generate_otp(size=4, chars=string.digits):
     return "".join(random.choice(chars) for _ in range(size))
 
@@ -272,45 +266,31 @@ def decrypt_small(token):
     return aesgcm.decrypt(nonce, ciphertext, None).decode("utf-8")
 
 
-def calculate_age(
-    date_of_birth: date | None,
-    *,
-    timezone: str = "UTC",
-    feb_29_policy: str = "feb28",  # "feb28" or "mar1"
-) -> int | None:
-    """
-    Calculate age from date_of_birth.
-
-    - Timezone-aware (uses the given IANA timezone)
-    - Handles Feb 29 birthdays
-    - Returns None if date_of_birth is None
-    """
-
-    if date_of_birth is None:
+def to_fixed(value: Number, places: int = 1):
+    if value is None:
         return None
 
-    tz = ZoneInfo(timezone)
-    today = datetime.now(tz).date()
+    d = value if isinstance(value, Decimal) else Decimal(str(value))
 
-    # Determine effective birthday for the current year
-    if date_of_birth.month == 2 and date_of_birth.day == 29:
-        if calendar.isleap(today.year):
-            effective_birthday = date(today.year, 2, 29)
-        else:
-            if feb_29_policy == "mar1":
-                effective_birthday = date(today.year, 3, 1)
-            else:  # default: feb28
-                effective_birthday = date(today.year, 2, 28)
-    else:
-        effective_birthday = date(
-            today.year,
-            date_of_birth.month,
-            date_of_birth.day,
-        )
+    quant = Decimal("1." + "0" * places)
+    fixed = d.quantize(quant, rounding=ROUND_HALF_UP)
 
-    age = today.year - date_of_birth.year
+    # remove trailing .0 if possible
+    if fixed == fixed.to_integral():
+        return int(fixed)
 
-    if today < effective_birthday:
-        age -= 1
+    return float(fixed)
 
-    return age
+
+def normalize_number(value, fx_place: int = None):
+    if isinstance(value, Decimal):
+        if value == value.to_integral():
+            return int(value)
+        return float(value)
+    if isinstance(value, float):
+        if value.is_integer():
+            return int(value)
+        return value
+    if fx_place is not None:
+        value = to_fixed(value, fx_place)
+    return value
