@@ -78,8 +78,14 @@ class Customer(BaseModel, CrudUrlMixin):
         }
 
     def get_bmi_data(self):
-        weight = self.weight['weight']
-        unit = self.weight['unit']
+        weight_data = self.weight
+
+        # Return None if no weight entry exists
+        if not weight_data:
+            return None
+
+        weight = weight_data['weight']
+        unit = weight_data['unit']
 
         if unit == WeightUnisChoices.LB:
             weight = float(weight) * 0.453592  # Convert pounds to kg
