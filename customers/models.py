@@ -9,7 +9,7 @@ from customers.helpers import calculate_age
 from core.models import BaseModel, CrudUrlMixin, RelatedModal
 from datetime import date
 
-from customers.constants import WeightUnisChoices
+from customers.constants import WeightUnisChoices, LanguageChoices, TimezoneChoices
 from customers.helpers import bmi_health_summary
 
 
@@ -40,6 +40,18 @@ class Customer(BaseModel, CrudUrlMixin):
         blank=True,
         null=True,
     )
+    language = models.CharField(
+        max_length=10,
+        choices=LanguageChoices.choices,
+        default=LanguageChoices.ENGLISH,
+        help_text="Preferred language for the app"
+    )
+    timezone = models.CharField(
+        max_length=50,
+        choices=TimezoneChoices.choices,
+        default=TimezoneChoices.ASIA_KOLKATA,
+        help_text="User's timezone"
+    )
 
     class Crud:
         url_base_name = "customer"
@@ -63,6 +75,7 @@ class Customer(BaseModel, CrudUrlMixin):
                 latest.weight), 'unit': latest.unit} if latest else None
 
     def get_profile_data(self, request):
+
         return {
 
             "email": self.user.email,
@@ -75,6 +88,8 @@ class Customer(BaseModel, CrudUrlMixin):
             "height": normalize_number(self.height, fx_place=1),
             "weight": self.weight,
             "date_of_birth": self.date_of_birth,
+            "language": self.language,
+            "timezone": self.timezone,
         }
 
     def get_bmi_data(self):

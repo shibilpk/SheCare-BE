@@ -1,9 +1,10 @@
 from ninja.errors import HttpError
 from ninja_extra import api_controller, http_get
+from django.utils import timezone
 
-from general.apis.v1.schemas import AppVersionOutSchema
+from general.apis.v1.schemas import AppVersionOutSchema, DailyTipSchema
 from general.constants import OSTypeEnum
-from general.models import AppVersion
+from general.models import AppVersion, DailyTip
 
 
 @api_controller('general/', tags=['General'])
@@ -35,3 +36,25 @@ class GeneralAPIController:
             }
         except AppVersion.DoesNotExist:
             raise HttpError(404, "App version not found")
+
+    @http_get(
+        'daily-tips/',
+        response={200: DailyTipSchema,
+                  404: dict},
+        auth=None
+    )
+    def daily_tips(self, request):
+        """
+        Get today's daily tip for women's health and wellness
+        """
+        today = timezone.now().date()
+
+        try:
+            daily_tip = DailyTip.objects.get(date=today)
+            return {
+                "date": daily_tip.date,
+                "short_description": daily_tip.short_description,
+                "long_description": daily_tip.long_description,
+            }
+        except DailyTip.DoesNotExist:
+            raise HttpError(404, "No daily tip available for today. Please run 'python manage.py populate_daily_tips' to generate tips.")

@@ -13,15 +13,6 @@ api = NinjaExtraAPI(
 
 @api.exception_handler(ApiError)
 def api_error_handler(request, exc: ApiError):
-    # return Response(
-    #     status=exc.status_code,
-    #     data={
-    #         "detail": {
-    #             "title": exc.title,
-    #             "message": exc.message,
-    #         }
-    #     }
-    # )
     return api.create_response(
         request,
         {
@@ -84,6 +75,7 @@ LOCAL_APPS = [
     'customers.apis.v1.api',
     'general.apis.v1.api',
     'periods.apis.v1.api',
+    'activities.apis.v1.api',
 ]
 for app_path in LOCAL_APPS:
     try:

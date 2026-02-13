@@ -1,6 +1,6 @@
 from django.db import models
 
-from general.constants import OSType
+from general.constants import LanguageChoice, OSType
 
 
 class AppVersion(models.Model):
@@ -31,3 +31,16 @@ class AppAdminSettings(models.Model):
     def get_settings(cls):
         settings = cls.objects.first()
         return settings if settings else cls.objects.create()
+
+
+class DailyTip(models.Model):
+    date = models.DateField(unique=True)
+    short_description = models.TextField(blank=True)
+    long_description = models.TextField(blank=True)
+    language = models.CharField(
+        max_length=10, choices=LanguageChoice.choices,
+        default=LanguageChoice.ENGLISH
+    )
+
+    def __str__(self):
+        return str(self.date)

@@ -176,7 +176,6 @@ class AuthAPIController:
                 user_id = refresh.get('user_id')
                 user = User.objects.get(id=user_id)
                 refresh = RefreshToken.for_user(user)
-
             return {
                 "access": str(refresh.access_token),
                 "refresh": str(refresh),

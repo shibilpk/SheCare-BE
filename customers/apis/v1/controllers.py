@@ -6,6 +6,7 @@ from accounts.apis.v1.permissions import IsCustomer
 from accounts.models import User, UserOtp
 from core.helpers import encrypt_small
 from customers.models import Customer, CustomerDiaryEntry, WeightEntry
+from customers.constants import LanguageChoices, TimezoneChoices
 from ninja_extra import api_controller, http_post, http_get, http_patch
 from ninja import Form, File
 from ninja.errors import HttpError
@@ -20,6 +21,10 @@ from .schemas import (
     CustomerProfileResponseSchema,
     HealthAnalysisResponseSchema,
     WeightEntryInSchema,
+    PreferencesUpdateSchema,
+    PreferencesOptionsSchema,
+    LanguageOptionSchema,
+    TimezoneOptionSchema,
 )
 
 
@@ -78,6 +83,29 @@ class CustomerOpenAPIController:
                 "message": "Please check your email to verify your account",
             },
             "user_id": encrypt_small(user.id),
+        }
+
+    @http_get(
+        "preferences/options/",
+        response={200: PreferencesOptionsSchema},
+        auth=None,
+    )
+    def get_preferences_options(self, request):
+        """
+        Get available language and timezone options
+        """
+        languages = [
+            {"value": choice[0], "label": choice[1]}
+            for choice in LanguageChoices.choices
+        ]
+        timezones = [
+            {"value": choice[0], "label": choice[1]}
+            for choice in TimezoneChoices.choices
+        ]
+
+        return {
+            "languages": languages,
+            "timezones": timezones,
         }
 
 
@@ -184,6 +212,38 @@ class CustomerAPIController:
         return {
             "bmi": customer.get_bmi_data(),
             "profile": customer.get_profile_data(request),
+        }
+
+    @http_patch(
+        "preferences/",
+        response={200: CustomerProfileUpdateOutSchema},
+    )
+    def update_preferences(self, request, payload: PreferencesUpdateSchema):
+        """
+        Update language and timezone preferences
+        """
+        user = request.user
+        customer = user.customer
+
+        update_fields = []
+
+        if payload.language is not None:
+            customer.language = payload.language
+            update_fields.append("language")
+
+        if payload.timezone is not None:
+            customer.timezone = payload.timezone
+            update_fields.append("timezone")
+
+        if update_fields:
+            customer.save(update_fields=update_fields)
+
+        return {
+            "profile": customer.get_profile_data(request),
+            "detail": {
+                "title": "Success",
+                "message": "Preferences updated successfully",
+            },
         }
 
 

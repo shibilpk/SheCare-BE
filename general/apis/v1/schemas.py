@@ -24,3 +24,9 @@ class AppVersionOutSchema(Schema):
     force_update: bool
     download_url: str
     release_notes: List[str]
+
+
+class DailyTipSchema(Schema):
+    date: date
+    short_description: str
+    long_description: str

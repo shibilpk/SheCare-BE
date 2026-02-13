@@ -1,7 +1,6 @@
 from django.utils.timezone import now
 from django.db.models import Avg
-from datetime import timedelta
-from .models import Period, PeriodProfile
+from .models import Period
 from general.models import AppAdminSettings
 
 
@@ -10,7 +9,6 @@ def calculate_main_card_display(profile, active_period):
     Calculate main card display data using server time.
     Returns status, label, value, subtitle, and button text.
     """
-    from datetime import date as date_type
 
     today = now().date()
     late_days = profile.get_late_period_days()
@@ -59,7 +57,9 @@ def calculate_main_card_display(profile, active_period):
                 return {
                     'card_status': 'fertile_window',
                     'card_label': 'Fertile Window Ends',
-                    'card_value': f"{days_left} {'Day' if days_left == 1 else 'Days'} Left",
+                    'card_value': (
+                        f"{days_left} {'Day' if days_left == 1 else 'Days'}"
+                        if days_left > 0 else 'Today'),
                     'card_subtitle': f"{start_str} - {end_str}",
                     'card_button_text': 'View History',
                 }

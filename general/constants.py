@@ -10,3 +10,8 @@ class OSType(models.TextChoices):
 class OSTypeEnum(str, Enum):
     ios = OSType.IOS
     android = OSType.ANDROID
+
+
+class LanguageChoice(models.TextChoices):
+    ENGLISH = 'en', 'English'
+    MALAYALAM = 'ml', 'Malayalam'
