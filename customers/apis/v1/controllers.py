@@ -147,7 +147,7 @@ class CustomerAPIController:
         user = request.user
         customer = user.customer
         customer_dict = payload.dict(exclude_unset=True)
-        user_dict = customer_dict.pop("user")
+        user_dict = customer_dict.pop("user", {})
         if user_dict:
             for key, value in user_dict.items():
                 setattr(user, key, value)
@@ -156,6 +156,7 @@ class CustomerAPIController:
         if photo is not None:
             customer_dict["photo"] = photo
 
+        print(customer_dict)
         if customer_dict:
             for key, value in customer_dict.items():
                 setattr(customer, key, value)

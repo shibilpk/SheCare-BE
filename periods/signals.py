@@ -22,13 +22,11 @@ def recalculate_period_profile(customer):
 
     if not latest_period:
         # No periods left - reset profile to defaults
-        period_profile.last_period_end_date = None
-        period_profile.next_period_start_date = None
+        period_profile.last_period = None
         period_profile.avg_cycle_length = 28  # Default
         period_profile.avg_period_length = 5  # Default
         period_profile.save(update_fields=[
-            "last_period_end_date",
-            "next_period_start_date",
+            "last_period",
             "avg_cycle_length",
             "avg_period_length"
         ])
@@ -45,7 +43,8 @@ def recalculate_period_profile(customer):
     today = now()
     reference_period = latest_period
 
-    # If latest period is ongoing, use last completed period
+    # If latest period is ongoing, use last completed period for calculations
+    # but still keep the latest as the reference
     if latest_period.end_date.date() > today.date():
         last_completed = Period.objects.filter(
             customer=customer,
@@ -54,24 +53,22 @@ def recalculate_period_profile(customer):
         if last_completed:
             reference_period = last_completed
 
-    # Update profile with reference period data
-    period_profile.last_period_end_date = reference_period.end_date.date()
+    # Update profile with reference to the period
+    # (next_period_start_date will be calculated automatically via property)
+    period_profile.last_period = reference_period
 
-    # Calculate next period start date
-    # Method 1: From last period's start + cycle length (standard medical definition)
-    # Method 2: From last period's end + (cycle - period) length
-    # Using Method 1 as it matches how cycle_length is calculated
-    period_profile.next_period_start_date = (
-        reference_period.start_date.date() +
-        timedelta(days=period_profile.avg_cycle_length)
-    )
+    # Calculate and update cycle regularity
+    regularity, variance = period_profile.get_cycle_regularity()
+    period_profile.cycle_regularity = regularity
+    period_profile.cycle_variance = variance
 
     # Save period profile with updated data
     period_profile.save(update_fields=[
-        "last_period_end_date",
-        "next_period_start_date",
+        "last_period",
         "avg_cycle_length",
-        "avg_period_length"
+        "avg_period_length",
+        "cycle_regularity",
+        "cycle_variance"
     ])
 
 

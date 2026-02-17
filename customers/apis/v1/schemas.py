@@ -54,6 +54,7 @@ class CustomerProfileSchema(Schema):
 class CustomerProfileUpdateSchema(Schema):
     language: Optional[str] = None
     timezone: Optional[str] = None
+    date_of_birth: Optional[date] = None
     height: Optional[Decimal] = Field(
         None,
         max_digits=5,

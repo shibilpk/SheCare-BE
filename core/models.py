@@ -145,13 +145,8 @@ class Mode(models.Model):
 class DailyEntry(models.Model):
     user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
     date = models.DateField()
-    moods = models.JSONField(default=list, blank=True)
-    symptoms = models.JSONField(default=list, blank=True)
-    flow = models.CharField(max_length=32, blank=True, null=True)
-    intimacy = models.CharField(max_length=32, blank=True, null=True)
-    activities = models.JSONField(default=list, blank=True)
-    ratings = models.JSONField(default=dict, blank=True)
-    notes = models.TextField(blank=True, null=True)
+    daily_data = models.JSONField(default=list, blank=True)
+    ratings = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

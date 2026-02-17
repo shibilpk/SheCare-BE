@@ -1,5 +1,6 @@
 from django.db import models
 
+from core.models import BaseModel
 from general.constants import LanguageChoice, OSType
 
 
@@ -33,7 +34,7 @@ class AppAdminSettings(models.Model):
         return settings if settings else cls.objects.create()
 
 
-class DailyTip(models.Model):
+class DailyTip(BaseModel):
     date = models.DateField(unique=True)
     short_description = models.TextField(blank=True)
     long_description = models.TextField(blank=True)
@@ -44,3 +45,13 @@ class DailyTip(models.Model):
 
     def __str__(self):
         return str(self.date)
+
+
+class BlogPost(BaseModel):
+    title = models.CharField(max_length=255)
+    content = models.TextField()
+    author = models.CharField(max_length=255)
+    published_date = models.DateField()
+
+    def __str__(self):
+        return self.title
