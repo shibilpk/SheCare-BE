@@ -41,7 +41,6 @@ class GeneralAPIController:
         'daily-tips/',
         response={200: DailyTipSchema,
                   404: dict},
-        auth=None
     )
     def daily_tips(self, request):
         """
