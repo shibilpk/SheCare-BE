@@ -156,7 +156,6 @@ class CustomerAPIController:
         if photo is not None:
             customer_dict["photo"] = photo
 
-        print(customer_dict)
         if customer_dict:
             for key, value in customer_dict.items():
                 setattr(customer, key, value)

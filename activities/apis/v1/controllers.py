@@ -4,8 +4,11 @@ from activities.constants import (
     MOODS, RATING_SECTIONS, SYMPTOMS, ACTIVITIES,
     INTIMACY_OPTIONS, FLOW_OPTIONS)
 from activities.apis.v1.schemas import (
-    DailyEntryInputSchema, DailyEntryOutputSchema)
+    DailyEntryInputSchema, DailyEntryOutputSchema,
+    HydrationLogInputSchema, HydrationLogOutputSchema,
+    HydrationContentOutputSchema)
 from core.models import DailyEntry
+from activities.models import HydrationLog, HydrationContent
 
 
 @api_controller("activities/", tags=["Daily Actions"])
@@ -190,5 +193,73 @@ class ActivitiesAPIController:
             }
         except DailyEntry.DoesNotExist:
             return 404, {"detail": "No entry found for this date"}
+
+
+@api_controller("hydration/", tags=["Hydration"])
+class HydrationAPIController:
+
+    # Hydration Endpoints
+    @http_get(
+        'hydration/{date}',
+        response={200: HydrationLogOutputSchema, 404: dict}
+    )
+    def get_hydration_log(self, request, date: str):
+        """Get hydration log for a specific date"""
+        user = request.user
+
+        try:
+            hydration_log = HydrationLog.objects.get(
+                user=user, date=date
+            )
+            return 200, hydration_log
+        except HydrationLog.DoesNotExist:
+            return 404, {"detail": "No hydration log found for this date"}
+
+    @http_post('hydration/', response=HydrationLogOutputSchema)
+    def create_or_update_hydration_log(
+            self, request, payload: HydrationLogInputSchema):
+        """Create or update hydration log for a specific date"""
+        user = request.user
+
+        hydration_log, created = HydrationLog.objects.get_or_create(
+            user=user,
+            date=payload.date,
+            defaults={
+                'amount_ml': payload.amount_ml,
+                'glass_size_ml': payload.glass_size_ml,
+                'daily_goal_ml': payload.daily_goal_ml,
+            }
+        )
+
+        if not created:
+            # Update existing log
+            if payload.amount_ml is not None:
+                hydration_log.amount_ml = payload.amount_ml
+            if payload.glass_size_ml is not None:
+                hydration_log.glass_size_ml = payload.glass_size_ml
+            if payload.daily_goal_ml is not None:
+                hydration_log.daily_goal_ml = payload.daily_goal_ml
+            hydration_log.save()
+
+        return hydration_log
+
+    @http_get('hydration-content/', response=HydrationContentOutputSchema)
+    def get_hydration_content(self, request):
+        """Get hydration benefits and tips"""
+        benefits = HydrationContent.objects.filter(
+            content_type='benefit',
+            is_active=True
+        ).values('id', 'content_type', 'icon', 'text', 'order')
+
+        tips = HydrationContent.objects.filter(
+            content_type='tip',
+            is_active=True
+        ).values('id', 'content_type', 'icon', 'text', 'order')
+
+        return {
+            'benefits': list(benefits),
+            'tips': list(tips)
+        }
+
 
 

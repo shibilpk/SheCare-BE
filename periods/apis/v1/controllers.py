@@ -112,5 +112,4 @@ class PeriodAPIController:
             profile = customer.period_profile
         else:
             raise HttpError(404, "No period profile found for customer")
-        print(get_current_period_status(profile))
         return get_current_period_status(profile)

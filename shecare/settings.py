@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     'general',
     'customers',
     'periods',
+    'activities',
     'core',
 ]
 

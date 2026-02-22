@@ -1,3 +1,5 @@
-from .controllers import ActivitiesAPIController
+from .controllers import (
+    ActivitiesAPIController, HydrationAPIController)
 
-register_controllers = [ActivitiesAPIController]
+register_controllers = [
+    ActivitiesAPIController, HydrationAPIController]
