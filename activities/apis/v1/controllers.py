@@ -283,7 +283,7 @@ class MedicationAPIController:
         """Get all medications with their dose status for a specific date"""
         user = request.user
         medications = Medication.objects.filter(user=user, is_active=True)
-        
+
         result = []
         for med in medications:
             # Get logs for this medication and date
@@ -291,10 +291,10 @@ class MedicationAPIController:
                 medication=med,
                 date=date
             ).order_by('dose_index')
-            
+
             # Create a dict for quick lookup
             log_dict = {log.dose_index: log for log in logs}
-            
+
             # Build doses array
             doses = []
             for idx, time_label in enumerate(med.dose_times):
@@ -304,7 +304,7 @@ class MedicationAPIController:
                     'time': time_label,
                     'taken': log.taken if log else False
                 })
-            
+
             result.append({
                 'id': med.id,
                 'name': med.name,
@@ -314,14 +314,14 @@ class MedicationAPIController:
                 'color': med.color,
                 'doses': doses
             })
-        
+
         return result
 
     @http_post('medications/', response=MedicationOutputSchema)
     def create_medication(self, request, payload: MedicationInputSchema):
         """Create a new medication"""
         user = request.user
-        
+
         medication = Medication.objects.create(
             user=user,
             name=payload.name,
@@ -334,17 +334,17 @@ class MedicationAPIController:
             start_date=payload.start_date,
             end_date=payload.end_date,
         )
-        
+
         return medication
 
     @http_put('medications/{medication_id}', response=MedicationOutputSchema)
     def update_medication(self, request, medication_id: int, payload: MedicationInputSchema):
         """Update an existing medication"""
         user = request.user
-        
+
         try:
             medication = Medication.objects.get(id=medication_id, user=user)
-            
+
             medication.name = payload.name
             medication.dosage = payload.dosage
             medication.frequency_period = payload.frequency_period
@@ -355,7 +355,7 @@ class MedicationAPIController:
             medication.start_date = payload.start_date
             medication.end_date = payload.end_date
             medication.save()
-            
+
             return medication
         except Medication.DoesNotExist:
             return {"error": "Medication not found"}, 404
@@ -364,12 +364,12 @@ class MedicationAPIController:
     def delete_medication(self, request, medication_id: int):
         """Soft delete a medication by marking it as inactive"""
         user = request.user
-        
+
         try:
             medication = Medication.objects.get(id=medication_id, user=user)
             medication.is_active = False
             medication.save()
-            
+
             return 200, {"message": "Medication deleted successfully"}
         except Medication.DoesNotExist:
             return 404, {"error": "Medication not found"}
@@ -378,10 +378,10 @@ class MedicationAPIController:
     def toggle_medication_dose(self, request, payload: MedicationLogInputSchema):
         """Toggle a medication dose as taken/not taken"""
         user = request.user
-        
+
         try:
             medication = Medication.objects.get(id=payload.medication_id, user=user)
-            
+
             # Get or create the log
             log, created = MedicationLog.objects.get_or_create(
                 medication=medication,
@@ -393,13 +393,13 @@ class MedicationAPIController:
                     'taken_at': timezone.now() if payload.taken else None,
                 }
             )
-            
+
             if not created:
                 # Update existing log
                 log.taken = payload.taken
                 log.taken_at = timezone.now() if payload.taken else None
                 log.save()
-            
+
             return log
         except Medication.DoesNotExist:
             return {"error": "Medication not found"}, 404
@@ -410,12 +410,12 @@ class MedicationAPIController:
     def get_medication_stats(self, request, date: str):
         """Get medication completion statistics for a specific date"""
         user = request.user
-        
+
         # Get all active medications
         medications = Medication.objects.filter(user=user, is_active=True)
-        
+
         total_doses = sum(med.times_per_period for med in medications)
-        
+
         # Get all logs for this date
         logs = MedicationLog.objects.filter(
             medication__user=user,
@@ -423,10 +423,10 @@ class MedicationAPIController:
             date=date,
             taken=True
         )
-        
+
         taken_doses = logs.count()
         completion_percent = (taken_doses / total_doses * 100) if total_doses > 0 else 0
-        
+
         return {
             'total_doses': total_doses,
             'taken_doses': taken_doses,

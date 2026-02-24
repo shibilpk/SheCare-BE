@@ -109,7 +109,7 @@ class Medication(models.Model):
     def _generate_icon_from_name(self):
         """Generate appropriate icon based on medication name"""
         name_lower = self.name.lower()
-        
+
         # Vitamins
         if 'vitamin d' in name_lower:
             return 'sun'
@@ -123,7 +123,7 @@ class Medication(models.Model):
             return 'flash'
         if 'vitamin' in name_lower:
             return 'leaf'
-        
+
         # Minerals
         if 'calcium' in name_lower:
             return 'food'
@@ -133,7 +133,7 @@ class Medication(models.Model):
             return 'lightning'
         if 'zinc' in name_lower:
             return 'shield'
-        
+
         # Specific supplements
         if 'folic' in name_lower or 'acid' in name_lower:
             return 'droplet'
@@ -147,7 +147,7 @@ class Medication(models.Model):
             return 'grain'
         if 'protein' in name_lower:
             return 'muscle'
-        
+
         # General categories
         if 'supplement' in name_lower:
             return 'plus'
@@ -155,7 +155,7 @@ class Medication(models.Model):
             return 'star'
         if 'herbal' in name_lower:
             return 'leaf'
-        
+
         return 'pharmacy'
 
     @property
@@ -163,12 +163,12 @@ class Medication(models.Model):
         """Generate human-readable frequency text"""
         if self.frequency_period == 'once':
             return 'One time only'
-        
+
         times_text = {
             1: 'Once',
             2: 'Twice',
         }.get(self.times_per_period, f"{self.times_per_period} times")
-        
+
         return f"{times_text} {self.frequency_period}"
 
     @property
