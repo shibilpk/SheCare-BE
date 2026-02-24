@@ -1,4 +1,7 @@
-from ninja_extra import api_controller, http_get, http_post
+from ninja_extra import api_controller, http_get, http_post, http_put, http_delete
+from datetime import datetime
+from django.utils import timezone
+from typing import List
 
 from activities.constants import (
     MOODS, RATING_SECTIONS, SYMPTOMS, ACTIVITIES,
@@ -6,9 +9,12 @@ from activities.constants import (
 from activities.apis.v1.schemas import (
     DailyEntryInputSchema, DailyEntryOutputSchema,
     HydrationLogInputSchema, HydrationLogOutputSchema,
-    HydrationContentOutputSchema)
+    HydrationContentOutputSchema,
+    MedicationInputSchema, MedicationOutputSchema,
+    MedicationWithDosesOutputSchema, MedicationLogInputSchema,
+    MedicationLogOutputSchema, MedicationStatsSchema)
 from core.models import DailyEntry
-from activities.models import HydrationLog, HydrationContent
+from activities.models import HydrationLog, HydrationContent, Medication, MedicationLog
 
 
 @api_controller("activities/", tags=["Daily Actions"])
@@ -262,4 +268,167 @@ class HydrationAPIController:
         }
 
 
+@api_controller("medication/", tags=["Medication"])
+class MedicationAPIController:
 
+    @http_get('medications/', response=List[MedicationOutputSchema])
+    def get_all_medications(self, request):
+        """Get all active medications for the user"""
+        user = request.user
+        medications = Medication.objects.filter(user=user, is_active=True)
+        return medications
+
+    @http_get('medications/by-date/{date}', response=List[MedicationWithDosesOutputSchema])
+    def get_medications_with_doses(self, request, date: str):
+        """Get all medications with their dose status for a specific date"""
+        user = request.user
+        medications = Medication.objects.filter(user=user, is_active=True)
+        
+        result = []
+        for med in medications:
+            # Get logs for this medication and date
+            logs = MedicationLog.objects.filter(
+                medication=med,
+                date=date
+            ).order_by('dose_index')
+            
+            # Create a dict for quick lookup
+            log_dict = {log.dose_index: log for log in logs}
+            
+            # Build doses array
+            doses = []
+            for idx, time_label in enumerate(med.dose_times):
+                log = log_dict.get(idx)
+                doses.append({
+                    'dose_index': idx,
+                    'time': time_label,
+                    'taken': log.taken if log else False
+                })
+            
+            result.append({
+                'id': med.id,
+                'name': med.name,
+                'dosage': med.dosage,
+                'frequency': med.frequency_text,
+                'icon': med.icon,
+                'color': med.color,
+                'doses': doses
+            })
+        
+        return result
+
+    @http_post('medications/', response=MedicationOutputSchema)
+    def create_medication(self, request, payload: MedicationInputSchema):
+        """Create a new medication"""
+        user = request.user
+        
+        medication = Medication.objects.create(
+            user=user,
+            name=payload.name,
+            dosage=payload.dosage,
+            frequency_period=payload.frequency_period,
+            times_per_period=payload.times_per_period,
+            color=payload.color,
+            icon=payload.icon,
+            is_active=payload.is_active,
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+        )
+        
+        return medication
+
+    @http_put('medications/{medication_id}', response=MedicationOutputSchema)
+    def update_medication(self, request, medication_id: int, payload: MedicationInputSchema):
+        """Update an existing medication"""
+        user = request.user
+        
+        try:
+            medication = Medication.objects.get(id=medication_id, user=user)
+            
+            medication.name = payload.name
+            medication.dosage = payload.dosage
+            medication.frequency_period = payload.frequency_period
+            medication.times_per_period = payload.times_per_period
+            medication.color = payload.color
+            medication.icon = payload.icon
+            medication.is_active = payload.is_active
+            medication.start_date = payload.start_date
+            medication.end_date = payload.end_date
+            medication.save()
+            
+            return medication
+        except Medication.DoesNotExist:
+            return {"error": "Medication not found"}, 404
+
+    @http_delete('medications/{medication_id}', response={200: dict, 404: dict})
+    def delete_medication(self, request, medication_id: int):
+        """Soft delete a medication by marking it as inactive"""
+        user = request.user
+        
+        try:
+            medication = Medication.objects.get(id=medication_id, user=user)
+            medication.is_active = False
+            medication.save()
+            
+            return 200, {"message": "Medication deleted successfully"}
+        except Medication.DoesNotExist:
+            return 404, {"error": "Medication not found"}
+
+    @http_post('medication-log/', response=MedicationLogOutputSchema)
+    def toggle_medication_dose(self, request, payload: MedicationLogInputSchema):
+        """Toggle a medication dose as taken/not taken"""
+        user = request.user
+        
+        try:
+            medication = Medication.objects.get(id=payload.medication_id, user=user)
+            
+            # Get or create the log
+            log, created = MedicationLog.objects.get_or_create(
+                medication=medication,
+                date=payload.date,
+                dose_index=payload.dose_index,
+                defaults={
+                    'dose_time': medication.dose_times[payload.dose_index] if payload.dose_index < len(medication.dose_times) else f"Dose {payload.dose_index + 1}",
+                    'taken': payload.taken,
+                    'taken_at': timezone.now() if payload.taken else None,
+                }
+            )
+            
+            if not created:
+                # Update existing log
+                log.taken = payload.taken
+                log.taken_at = timezone.now() if payload.taken else None
+                log.save()
+            
+            return log
+        except Medication.DoesNotExist:
+            return {"error": "Medication not found"}, 404
+        except IndexError:
+            return {"error": "Invalid dose index"}, 400
+
+    @http_get('medication-stats/{date}', response=MedicationStatsSchema)
+    def get_medication_stats(self, request, date: str):
+        """Get medication completion statistics for a specific date"""
+        user = request.user
+        
+        # Get all active medications
+        medications = Medication.objects.filter(user=user, is_active=True)
+        
+        total_doses = sum(med.times_per_period for med in medications)
+        
+        # Get all logs for this date
+        logs = MedicationLog.objects.filter(
+            medication__user=user,
+            medication__is_active=True,
+            date=date,
+            taken=True
+        )
+        
+        taken_doses = logs.count()
+        completion_percent = (taken_doses / total_doses * 100) if total_doses > 0 else 0
+        
+        return {
+            'total_doses': total_doses,
+            'taken_doses': taken_doses,
+            'completion_percent': round(completion_percent, 2)
+        }

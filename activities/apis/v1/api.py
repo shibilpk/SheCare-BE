@@ -1,5 +1,5 @@
 from .controllers import (
-    ActivitiesAPIController, HydrationAPIController)
+    ActivitiesAPIController, HydrationAPIController, MedicationAPIController)
 
 register_controllers = [
-    ActivitiesAPIController, HydrationAPIController]
+    ActivitiesAPIController, HydrationAPIController, MedicationAPIController]

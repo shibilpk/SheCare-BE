@@ -1,6 +1,9 @@
 from ninja.errors import HttpError
 from ninja_extra import api_controller, http_get
 from django.utils import timezone
+from django.http import JsonResponse, HttpResponse
+import os
+import json
 
 from general.apis.v1.schemas import AppVersionOutSchema, DailyTipSchema
 from general.constants import OSTypeEnum
@@ -57,3 +60,39 @@ class GeneralAPIController:
             }
         except DailyTip.DoesNotExist:
             raise HttpError(404, "No daily tip available for today. Please run 'python manage.py populate_daily_tips' to generate tips.")
+
+    @http_get(
+        'animations/{animation_name}/',
+        auth=None
+    )
+    def get_animation(self, request, animation_name: str):
+        """
+        Serve Lottie animation JSON files
+        Supported animations: fireworks, devices
+        """
+        # Validate animation name (prevent directory traversal)
+        allowed_animations = ['fireworks']
+        if animation_name not in allowed_animations:
+            raise HttpError(404, "Animation not found")
+
+        # Build file path
+        from django.conf import settings
+        animation_path = os.path.join(
+            settings.BASE_DIR,
+            'staticfiles',
+            'app',
+            'animations',
+            f'{animation_name}.json'
+        )
+
+        # Check if file exists
+        if not os.path.exists(animation_path):
+            raise HttpError(404, "Animation file not found")
+
+        # Read and return JSON
+        try:
+            with open(animation_path, 'r') as f:
+                animation_data = json.load(f)
+            return animation_data
+        except Exception as e:
+            raise HttpError(500, f"Error loading animation: {str(e)}")

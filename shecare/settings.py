@@ -119,7 +119,7 @@ NINJA_EXTRA = {
 # JWT Settings for django-ninja-jwt
 NINJA_JWT = {
     # Access token expires in 60 minutes
-    'ACCESS_TOKEN_LIFETIME': timedelta(seconds=10),
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=10),
     # Refresh token expires in 7 days
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     'ROTATE_REFRESH_TOKENS': True
