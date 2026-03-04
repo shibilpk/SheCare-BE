@@ -1,7 +1,8 @@
-from ninja_extra import api_controller, http_get, http_post, http_put, http_delete
-from datetime import datetime
-from django.utils import timezone
+from ninja_extra import (
+    api_controller, http_get, http_post, http_put, http_delete
+)
 from typing import List
+from django.db.models import Q, Sum
 
 from activities.constants import (
     MOODS, RATING_SECTIONS, SYMPTOMS, ACTIVITIES,
@@ -12,9 +13,17 @@ from activities.apis.v1.schemas import (
     HydrationContentOutputSchema,
     MedicationInputSchema, MedicationOutputSchema,
     MedicationWithDosesOutputSchema, MedicationLogInputSchema,
-    MedicationLogOutputSchema, MedicationStatsSchema)
+    MedicationLogOutputSchema, MedicationStatsSchema,
+    ErrorResponseSchema,
+    NutritionLogInputSchema, NutritionLogOutputSchema,
+    NutritionGoalInputSchema, NutritionGoalOutputSchema,
+    FoodSuggestionOutputSchema, NutritionSummarySchema,
+    FoodSearchResultSchema)
 from core.models import DailyEntry
-from activities.models import HydrationLog, HydrationContent, Medication, MedicationLog
+from activities.models import (
+    HydrationLog, HydrationContent,
+    NutritionLog, NutritionGoal, FoodSuggestion)
+from activities.services import MedicationService
 
 
 @api_controller("activities/", tags=["Daily Actions"])
@@ -50,7 +59,7 @@ class ActivitiesAPIController:
         ]
 
         # Get or create the daily entry for this date
-        daily_entry, created = DailyEntry.objects.update_or_create(
+        daily_entry, _ = DailyEntry.objects.update_or_create(
             user=user,
             date=payload.date,
             defaults={
@@ -62,7 +71,7 @@ class ActivitiesAPIController:
         return daily_entry
 
     @http_get('daily-entries/{date}',
-        response={200: DailyEntryOutputSchema, 404: dict})
+              response={200: DailyEntryOutputSchema, 404: dict})
     def get_daily_entry(self, request, date: str):
         """Get daily entry for a specific date"""
         user = request.user
@@ -74,7 +83,7 @@ class ActivitiesAPIController:
             return 404, {"detail": "No entry found for this date"}
 
     @http_get('daily-entries-detailed/{date}',
-        response={200: dict, 404: dict})
+              response={200: dict, 404: dict})
     def get_daily_entries_detailed(self, request, date: str):
         """Get daily entry summary for a specific date"""
         user = request.user
@@ -156,7 +165,8 @@ class ActivitiesAPIController:
 
             # Intimacy summary
             if grouped['intimacy']:
-                intimacy_data = lookups['intimacy'].get(grouped['intimacy'][0].get('id'), {})
+                intimacy_data = lookups['intimacy'].get(
+                    grouped['intimacy'][0].get('id'), {})
                 summary_cards.append({
                     'id': card_id,
                     'icon': intimacy_data.get('emoji', '❤️'),
@@ -168,7 +178,8 @@ class ActivitiesAPIController:
 
             # Flow summary
             if grouped['flow']:
-                flow_data = lookups['flow'].get(grouped['flow'][0].get('id'), {})
+                flow_data = lookups['flow'].get(
+                    grouped['flow'][0].get('id'), {})
                 summary_cards.append({
                     'id': card_id,
                     'icon': flow_data.get('emoji', '💧'),
@@ -180,7 +191,8 @@ class ActivitiesAPIController:
 
             # Ratings summary
             if daily_entry.ratings:
-                avg_rating = sum(r.get('rating', 0) for r in daily_entry.ratings) / len(daily_entry.ratings)
+                avg_rating = sum(r.get('rating', 0)
+                                 for r in daily_entry.ratings) / len(daily_entry.ratings)
                 summary_cards.append({
                     'id': card_id,
                     'icon': 'star',
@@ -270,165 +282,299 @@ class HydrationAPIController:
 
 @api_controller("medication/", tags=["Medication"])
 class MedicationAPIController:
+    """Controller for medication management endpoints"""
 
-    @http_get('medications/', response=List[MedicationOutputSchema])
-    def get_all_medications(self, request):
-        """Get all active medications for the user"""
-        user = request.user
-        medications = Medication.objects.filter(user=user, is_active=True)
-        return medications
+    # Error messages
+    MEDICATION_NOT_FOUND = "Medication not found"
 
-    @http_get('medications/by-date/{date}', response=List[MedicationWithDosesOutputSchema])
+    def __init__(self):
+        self.service = MedicationService()
+
+    @http_get(
+        'medications/by-date/{date}',
+        response=List[MedicationWithDosesOutputSchema]
+    )
     def get_medications_with_doses(self, request, date: str):
         """Get all medications with their dose status for a specific date"""
-        user = request.user
-        medications = Medication.objects.filter(user=user, is_active=True)
+        medications_with_doses = self.service.get_medications_with_doses(
+            user=request.user,
+            target_date=date
+        )
+        return medications_with_doses
 
-        result = []
-        for med in medications:
-            # Get logs for this medication and date
-            logs = MedicationLog.objects.filter(
-                medication=med,
-                date=date
-            ).order_by('dose_index')
-
-            # Create a dict for quick lookup
-            log_dict = {log.dose_index: log for log in logs}
-
-            # Build doses array
-            doses = []
-            for idx, time_label in enumerate(med.dose_times):
-                log = log_dict.get(idx)
-                doses.append({
-                    'dose_index': idx,
-                    'time': time_label,
-                    'taken': log.taken if log else False
-                })
-
-            result.append({
-                'id': med.id,
-                'name': med.name,
-                'dosage': med.dosage,
-                'frequency': med.frequency_text,
-                'icon': med.icon,
-                'color': med.color,
-                'doses': doses
-            })
-
-        return result
-
-    @http_post('medications/', response=MedicationOutputSchema)
+    @http_post(
+        'medications/',
+        response={201: MedicationOutputSchema, 400: ErrorResponseSchema}
+    )
     def create_medication(self, request, payload: MedicationInputSchema):
-        """Create a new medication"""
-        user = request.user
+        """Create a new medication for the authenticated user"""
 
-        medication = Medication.objects.create(
-            user=user,
-            name=payload.name,
-            dosage=payload.dosage,
-            frequency_period=payload.frequency_period,
-            times_per_period=payload.times_per_period,
-            color=payload.color,
-            icon=payload.icon,
-            is_active=payload.is_active,
-            start_date=payload.start_date,
-            end_date=payload.end_date,
+        medication_data = payload.dict(exclude_unset=True)
+        medication = self.service.create_medication(
+            user=request.user,
+            medication_data=medication_data
+        )
+        return 201, medication
+
+    @http_put(
+        'medications/{medication_id}',
+        response={
+            200: MedicationOutputSchema,
+            404: ErrorResponseSchema,
+            400: ErrorResponseSchema
+        }
+    )
+    def update_medication(
+        self, request, medication_id: int, payload: MedicationInputSchema
+    ):
+        """Update an existing medication asdasdas asdasds asdasda asdasd asdsadas sadasdas asdsa """
+        medication = self.service.get_medication_by_id(
+            medication_id, request.user
         )
 
-        return medication
+        if not medication:
+            return 404, {
+                "error": self.MEDICATION_NOT_FOUND,
+                "detail": f"No medication found with ID {medication_id}"
+            }
 
-    @http_put('medications/{medication_id}', response=MedicationOutputSchema)
-    def update_medication(self, request, medication_id: int, payload: MedicationInputSchema):
-        """Update an existing medication"""
-        user = request.user
+        medication_data = payload.dict(exclude_unset=True)
+        updated_medication = self.service.update_medication(
+            medication=medication,
+            medication_data=medication_data
+        )
+        return 200, updated_medication
 
-        try:
-            medication = Medication.objects.get(id=medication_id, user=user)
-
-            medication.name = payload.name
-            medication.dosage = payload.dosage
-            medication.frequency_period = payload.frequency_period
-            medication.times_per_period = payload.times_per_period
-            medication.color = payload.color
-            medication.icon = payload.icon
-            medication.is_active = payload.is_active
-            medication.start_date = payload.start_date
-            medication.end_date = payload.end_date
-            medication.save()
-
-            return medication
-        except Medication.DoesNotExist:
-            return {"error": "Medication not found"}, 404
-
-    @http_delete('medications/{medication_id}', response={200: dict, 404: dict})
+    @http_delete(
+        'medications/{medication_id}',
+        response={200: dict, 404: ErrorResponseSchema}
+    )
     def delete_medication(self, request, medication_id: int):
         """Soft delete a medication by marking it as inactive"""
-        user = request.user
+        medication = self.service.get_medication_by_id(
+            medication_id, request.user
+        )
 
-        try:
-            medication = Medication.objects.get(id=medication_id, user=user)
-            medication.is_active = False
-            medication.save()
+        if not medication:
+            return 404, {
+                "error": self.MEDICATION_NOT_FOUND,
+                "detail": f"No medication found with ID {medication_id}"
+            }
 
-            return 200, {"message": "Medication deleted successfully"}
-        except Medication.DoesNotExist:
-            return 404, {"error": "Medication not found"}
+        self.service.soft_delete_medication(medication)
+        return 200, {
+            "message": "Medication deleted successfully",
+            "medication_id": medication_id
+        }
 
-    @http_post('medication-log/', response=MedicationLogOutputSchema)
-    def toggle_medication_dose(self, request, payload: MedicationLogInputSchema):
+    @http_post(
+        'medication-log/',
+        response={
+            200: MedicationLogOutputSchema,
+            404: ErrorResponseSchema,
+            400: ErrorResponseSchema
+        }
+    )
+    def toggle_medication_dose(
+        self, request, payload: MedicationLogInputSchema
+    ):
         """Toggle a medication dose as taken/not taken"""
-        user = request.user
+        medication = self.service.get_medication_by_id(
+            payload.medication_id,
+            request.user
+        )
+
+        if not medication:
+            return 404, {
+                "error": self.MEDICATION_NOT_FOUND,
+                "detail": (
+                    f"No medication found with ID "
+                    f"{payload.medication_id}"
+                )
+            }
 
         try:
-            medication = Medication.objects.get(id=payload.medication_id, user=user)
-
-            # Get or create the log
-            log, created = MedicationLog.objects.get_or_create(
+            log, _ = self.service.toggle_medication_dose(
                 medication=medication,
-                date=payload.date,
+                target_date=payload.date,
                 dose_index=payload.dose_index,
-                defaults={
-                    'dose_time': medication.dose_times[payload.dose_index] if payload.dose_index < len(medication.dose_times) else f"Dose {payload.dose_index + 1}",
-                    'taken': payload.taken,
-                    'taken_at': timezone.now() if payload.taken else None,
-                }
+                taken=payload.taken
             )
-
-            if not created:
-                # Update existing log
-                log.taken = payload.taken
-                log.taken_at = timezone.now() if payload.taken else None
-                log.save()
-
-            return log
-        except Medication.DoesNotExist:
-            return {"error": "Medication not found"}, 404
-        except IndexError:
-            return {"error": "Invalid dose index"}, 400
+            return 200, log
+        except ValueError as e:
+            return 400, {
+                "error": "Invalid dose index",
+                "detail": str(e)
+            }
+        except Exception as e:
+            return 400, {
+                "error": "Failed to log medication dose",
+                "detail": str(e)
+            }
 
     @http_get('medication-stats/{date}', response=MedicationStatsSchema)
     def get_medication_stats(self, request, date: str):
         """Get medication completion statistics for a specific date"""
-        user = request.user
+        stats = self.service.get_medication_stats(
+            user=request.user,
+            target_date=date
+        )
+        return stats
 
-        # Get all active medications
-        medications = Medication.objects.filter(user=user, is_active=True)
 
-        total_doses = sum(med.times_per_period for med in medications)
+@api_controller("nutrition/", tags=["Nutrition"])
+class NutritionAPIController:
+    """Controller for nutrition tracking endpoints"""
 
-        # Get all logs for this date
-        logs = MedicationLog.objects.filter(
-            medication__user=user,
-            medication__is_active=True,
-            date=date,
-            taken=True
+    @http_get(
+        'summary/{date}',
+        response={200: NutritionSummarySchema, 400: ErrorResponseSchema}
+    )
+    def get_nutrition_summary(self, request, date: str):
+        """Get nutrition summary for a specific date"""
+        customer = request.user.customer
+
+        # Get or create nutrition goal
+        goal, _ = NutritionGoal.objects.get_or_create(customer=customer)
+
+        # Get all logs for the date
+        logs = NutritionLog.objects.filter(customer=customer, date=date)
+
+        # Calculate totals
+        totals = logs.aggregate(
+            calories=Sum('calories'),
+            carbs=Sum('carbs'),
+            protein=Sum('protein'),
+            fat=Sum('fat')
         )
 
-        taken_doses = logs.count()
-        completion_percent = (taken_doses / total_doses * 100) if total_doses > 0 else 0
+        # Handle None values from empty aggregation
+        totals = {
+            'calories': totals['calories'] or 0,
+            'carbs': totals['carbs'] or 0,
+            'protein': totals['protein'] or 0,
+            'fat': totals['fat'] or 0,
+        }
 
-        return {
-            'total_doses': total_doses,
-            'taken_doses': taken_doses,
-            'completion_percent': round(completion_percent, 2)
+        # Calculate progress
+        progress = {
+            'calories': min(100, round((totals['calories'] / goal.calories) * 100, 2)) if goal.calories > 0 and totals['calories'] else 0,
+            'carbs': min(100, round((totals['carbs'] / goal.carbs) * 100, 2)) if goal.carbs > 0 and totals['carbs'] else 0,
+            'protein': min(100, round((totals['protein'] / goal.protein) * 100, 2)) if goal.protein > 0 and totals['protein'] else 0,
+            'fat': min(100, round((totals['fat'] / goal.fat) * 100, 2)) if goal.fat > 0 and totals['fat'] else 0,
+        }
+
+        return 200, {
+            'date': date,
+            'logs': list(logs),
+            'goal': goal,
+            'totals': totals,
+            'progress': progress
+        }
+
+    @http_post(
+        'logs/',
+        response={201: NutritionLogOutputSchema, 400: ErrorResponseSchema}
+    )
+    def create_nutrition_log(self, request, payload: NutritionLogInputSchema):
+        """Create a new nutrition log entry"""
+        log = NutritionLog.objects.create(
+            customer=request.user.customer,
+            **payload.dict()
+        )
+        return 201, log
+
+    @http_put(
+        'logs/{log_id}',
+        response={200: NutritionLogOutputSchema, 404: ErrorResponseSchema}
+    )
+    def update_nutrition_log(self, request, log_id: int, payload: NutritionLogInputSchema):
+        """Update a nutrition log entry"""
+        try:
+            log = NutritionLog.objects.get(
+                id=log_id, customer=request.user.customer)
+            for field, value in payload.dict().items():
+                setattr(log, field, value)
+            log.save()
+            return 200, log
+        except NutritionLog.DoesNotExist:
+            return 404, {
+                "error": "Not found",
+                "detail": f"No nutrition log found with ID {log_id}"
+            }
+
+    @http_delete(
+        'logs/{log_id}',
+        response={200: dict, 404: ErrorResponseSchema}
+    )
+    def delete_nutrition_log(self, request, log_id: int):
+        """Delete a nutrition log entry"""
+        try:
+            log = NutritionLog.objects.get(
+                id=log_id, customer=request.user.customer)
+            log.delete()
+            return 200, {"message": "Nutrition log deleted successfully"}
+        except NutritionLog.DoesNotExist:
+            return 404, {
+                "error": "Not found",
+                "detail": f"No nutrition log found with ID {log_id}"
+            }
+
+    @http_get('goal/', response=NutritionGoalOutputSchema)
+    def get_nutrition_goal(self, request):
+        """Get customer's nutrition goal"""
+        goal, _ = NutritionGoal.objects.get_or_create(
+            customer=request.user.customer)
+        return goal
+
+    @http_post('goal/', response=NutritionGoalOutputSchema)
+    def update_nutrition_goal(self, request, payload: NutritionGoalInputSchema):
+        """Update customer's nutrition goal"""
+        goal, _ = NutritionGoal.objects.update_or_create(
+            customer=request.user.customer,
+            defaults=payload.dict()
+        )
+        return goal
+
+    @http_get(
+        'food-suggestions/',
+        response={200: FoodSearchResultSchema, 400: ErrorResponseSchema}
+    )
+    def search_food_suggestions(
+        self, request,
+        q: str = '',
+        page: int = 1,
+        page_size: int = 10
+    ):
+        """Search food suggestions with pagination"""
+        if page < 1:
+            return 400, {"error": "Invalid page number", "detail": "Page must be >= 1"}
+
+        if page_size < 1 or page_size > 100:
+            return 400, {"error": "Invalid page size", "detail": "Page size must be between 1 and 100"}
+
+        # Build query
+        queryset = FoodSuggestion.objects.filter(is_active=True)
+
+        if q:
+            queryset = queryset.filter(
+                Q(name__icontains=q)
+            )
+
+        # Get total count
+        total = queryset.count()
+
+        # Paginate
+        start = (page - 1) * page_size
+        end = start + page_size
+        results = list(queryset[start:end])
+
+        has_next = end < total
+
+        return 200, {
+            'results': results,
+            'total': total,
+            'page': page,
+            'page_size': page_size,
+            'has_next': has_next
         }

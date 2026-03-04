@@ -5,13 +5,17 @@ from django.db import transaction
 from accounts.apis.v1.permissions import IsCustomer
 from accounts.models import User, UserOtp
 from core.helpers import encrypt_small
-from customers.models import Customer, CustomerDiaryEntry, WeightEntry
-from customers.constants import LanguageChoices, TimezoneChoices
+from customers.models import Customer, CustomerDiaryEntry, WeightEntry, Reminder
+from customers.constants import (
+    LanguageChoices,
+    TimezoneChoices,
+    DEFAULT_REMINDER_CHOICES,
+)
 from ninja_extra import api_controller, http_post, http_get, http_patch
 from ninja import Form, File
 from ninja.errors import HttpError
 
-from general.apis.v1.schemas import DetailsSuccessSchema, SuccessSchema
+from general.apis.v1.schemas import SuccessSchema
 from .schemas import (
     CustomerDiaryEntryInOutSchema,
     CustomerProfileUpdateOutSchema,
@@ -20,11 +24,13 @@ from .schemas import (
     CustomerRegistrationSchema,
     CustomerProfileResponseSchema,
     HealthAnalysisResponseSchema,
+    ReminderInfoSchema,
     WeightEntryInSchema,
     PreferencesUpdateSchema,
     PreferencesOptionsSchema,
-    LanguageOptionSchema,
-    TimezoneOptionSchema,
+    ReminderSettingsSchema,
+    ReminderSettingsUpdateSchema,
+    ReminderUpdateResponseSchema,
 )
 
 
@@ -74,7 +80,7 @@ class CustomerOpenAPIController:
             user.save()
 
             # Create customer profile only if it does not exist
-            customer, _ = Customer.objects.get_or_create(user=user)
+            _, _ = Customer.objects.get_or_create(user=user)
             UserOtp.create_email_otp(user.email)
 
         return 200, {
@@ -243,6 +249,128 @@ class CustomerAPIController:
             "detail": {
                 "title": "Success",
                 "message": "Preferences updated successfully",
+            },
+        }
+
+
+@api_controller("reminder/", tags=["Reminder"], permissions=[IsCustomer])
+class CustomerReminderAPIController:
+
+    @http_get(
+        "reminder-info/",
+        response={200: ReminderInfoSchema},
+    )
+    def get_reminder_info(self, request):
+        """
+        Get reminder info for the authenticated customer
+        """
+        return {
+            "reminder_info": [
+                'Enable period reminders to get notified about your upcoming cycle.',
+                'Use ovulation reminders to track your fertile window.',
+                'Set medication reminders to never miss a dose.',
+                'Customize reminder times and advance days to fit your schedule.',
+            ]
+        }
+
+    @http_get(
+        "reminder-settings/",
+        response={200: ReminderSettingsSchema},
+    )
+    def get_reminder_settings(self, request):
+        """
+        Get reminder settings for the authenticated customer
+        Returns default reminders merged with user's saved customizations
+        """
+        user = request.user
+        customer = user.customer
+
+        # Get user's saved reminders
+        saved_reminders = {
+            reminder.reminder_type: reminder
+            for reminder in customer.reminders.all()
+        }
+
+        # Merge defaults with saved reminders
+        reminder_list = []
+        for default_reminder in DEFAULT_REMINDER_CHOICES:
+            reminder_type = default_reminder['reminder_type']
+            saved = saved_reminders.get(reminder_type)
+
+            reminder_list.append({
+                "reminder_type": reminder_type,
+                "title": default_reminder['title'],
+                "icon": default_reminder.get('icon'),
+                "color": default_reminder.get('color', '#666'),
+                "enabled": saved.enabled if saved else default_reminder['enabled'],
+                "time": saved.time if saved else default_reminder['time'],
+                "days_advance": saved.days_advance if saved else default_reminder['days_advance'],
+            })
+
+        return {
+            "reminder_settings": reminder_list
+        }
+
+    @http_patch(
+        "reminder-settings/",
+        response={200: ReminderUpdateResponseSchema},
+    )
+    def update_reminder_settings(self, request, payload: ReminderSettingsUpdateSchema):
+        """
+        Update reminder settings for the authenticated customer
+        Returns only the updated reminder
+        """
+        user = request.user
+        customer = user.customer
+
+        # Create a map of defaults for quick lookup
+        defaults_map = {
+            default['reminder_type']: default
+            for default in DEFAULT_REMINDER_CHOICES
+        }
+
+        # We expect only one reminder in the update
+        if not payload.reminder_settings or len(payload.reminder_settings) == 0:
+            raise HttpError(400, "No reminder data provided")
+
+        reminder_data = payload.reminder_settings[0]
+        reminder_type = reminder_data['reminder_type']
+        default = defaults_map.get(reminder_type)
+
+        if not default:
+            raise HttpError(400, "Invalid reminder type")
+
+        # Get values from request or default
+        is_enabled = reminder_data.get('enabled', default['enabled'])
+        time = reminder_data.get('time', default['time'])
+        days_advance = reminder_data.get(
+            'days_advance', default['days_advance'])
+
+        # Save the reminder
+        Reminder.objects.update_or_create(
+            customer=customer,
+            reminder_type=reminder_type,
+            defaults={
+                'enabled': is_enabled,
+                'time': time,
+                'days_advance': days_advance,
+            }
+        )
+
+        # Return the updated reminder
+        return {
+            "reminder": {
+                "reminder_type": reminder_type,
+                "title": default['title'],
+                "icon": default.get('icon', 'bell'),
+                "color": default.get('color', '#666'),
+                "enabled": is_enabled,
+                "time": time,
+                "days_advance": days_advance,
+            },
+            "detail": {
+                "title": "Success",
+                "message": "Reminder updated successfully",
             },
         }
 

@@ -7,9 +7,14 @@ from accounts.models import User
 from core.helpers import normalize_number
 from customers.helpers import calculate_age
 from core.models import BaseModel, CrudUrlMixin, RelatedModal
-from datetime import date
 
-from customers.constants import WeightUnisChoices, LanguageChoices, TimezoneChoices
+from customers.constants import (
+    WeightUnisChoices,
+    LanguageChoices,
+    TimezoneChoices,
+    ReminderTypeChoices,
+    get_reminder_details,
+)
 from customers.helpers import bmi_health_summary
 
 
@@ -148,3 +153,44 @@ class CustomerDiaryEntry(BaseModel):
 
     class Meta:
         ordering = ['-entry_date']
+
+
+class Reminder(BaseModel):
+    customer = models.ForeignKey(
+        Customer, on_delete=models.CASCADE, related_name="reminders"
+    )
+    reminder_type = models.CharField(
+        max_length=15,
+        choices=ReminderTypeChoices.choices,
+        help_text="Type of reminder"
+    )
+    enabled = models.BooleanField(default=True)
+    time = models.CharField(
+        max_length=20,
+        help_text="Time in format HH:MM AM/PM"
+    )
+    days_advance = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(7)],
+        help_text="Number of days before event to send reminder"
+    )
+
+    def __str__(self):
+        details = get_reminder_details(self.reminder_type)
+        return f"{details['title']} - {self.customer.user.get_full_name()}"
+
+    @property
+    def title(self):
+        return get_reminder_details(self.reminder_type)['title']
+
+    @property
+    def icon(self):
+        return get_reminder_details(self.reminder_type)['icon']
+
+    @property
+    def color(self):
+        return get_reminder_details(self.reminder_type)['color']
+
+    class Meta:
+        unique_together = ['customer', 'reminder_type']
+        ordering = ['id']

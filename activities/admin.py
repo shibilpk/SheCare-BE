@@ -1,5 +1,8 @@
 from django.contrib import admin
-from activities.models import HydrationLog, HydrationContent, Medication, MedicationLog
+from activities.models import (
+    HydrationLog, HydrationContent, Medication, MedicationLog,
+    NutritionLog, NutritionGoal, FoodSuggestion
+)
 
 # Register your models here.
 
@@ -38,3 +41,27 @@ class MedicationLogAdmin(admin.ModelAdmin):
     search_fields = ('medication__name', 'medication__user__email')
     ordering = ('-date', 'dose_index')
     list_editable = ('taken',)
+
+
+@admin.register(NutritionLog)
+class NutritionLogAdmin(admin.ModelAdmin):
+    list_display = ('customer', 'date', 'name', 'calories', 'carbs', 'protein', 'fat', 'created_at')
+    list_filter = ('date', 'created_at')
+    search_fields = ('customer__user__email', 'customer__user__phone', 'name')
+    ordering = ('-date', '-created_at')
+
+
+@admin.register(NutritionGoal)
+class NutritionGoalAdmin(admin.ModelAdmin):
+    list_display = ('customer', 'calories', 'carbs', 'protein', 'fat', 'created_at', 'updated_at')
+    search_fields = ('customer__user__email', 'customer__user__phone')
+    ordering = ('-created_at',)
+
+
+@admin.register(FoodSuggestion)
+class FoodSuggestionAdmin(admin.ModelAdmin):
+    list_display = ('name', 'calories', 'carbs', 'protein', 'fat', 'usage_count', 'is_active', 'created_at')
+    list_filter = ('is_active', 'created_at')
+    search_fields = ('name',)
+    ordering = ('-usage_count', 'name')
+    list_editable = ('is_active',)

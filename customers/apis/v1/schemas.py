@@ -168,3 +168,25 @@ class TimezoneOptionSchema(Schema):
 class PreferencesOptionsSchema(Schema):
     languages: List[LanguageOptionSchema]
     timezones: List[TimezoneOptionSchema]
+
+
+class ReminderSettingsSchema(Schema):
+    reminder_settings: list
+
+
+class ReminderSettingsUpdateSchema(Schema):
+    reminder_settings: list
+
+
+class ReminderSettingsResponseSchema(Schema):
+    reminder_settings: list
+    detail: DetailsSuccessSchema
+
+
+class ReminderUpdateResponseSchema(Schema):
+    reminder: dict
+    detail: DetailsSuccessSchema
+
+
+class ReminderInfoSchema(Schema):
+    reminder_info: List[str]
