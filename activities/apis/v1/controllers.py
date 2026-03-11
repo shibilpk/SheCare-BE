@@ -19,7 +19,7 @@ from activities.apis.v1.schemas import (
     NutritionGoalInputSchema, NutritionGoalOutputSchema,
     FoodSuggestionOutputSchema, NutritionSummarySchema,
     FoodSearchResultSchema)
-from core.models import DailyEntry
+from customers.models import DailyEntry, DiaryEntry
 from activities.models import (
     HydrationLog, HydrationContent,
     NutritionLog, NutritionGoal, FoodSuggestion)
@@ -50,7 +50,7 @@ class ActivitiesAPIController:
     def create_or_update_daily_entry(
             self, request, payload: DailyEntryInputSchema):
         """Create or update a daily entry for the authenticated user"""
-        user = request.user
+        customer = request.user.customer
 
         # Transform daily_data to list of dicts
         daily_data_list = [
@@ -60,7 +60,7 @@ class ActivitiesAPIController:
 
         # Get or create the daily entry for this date
         daily_entry, _ = DailyEntry.objects.update_or_create(
-            user=user,
+            customer=customer,
             date=payload.date,
             defaults={
                 'daily_data': daily_data_list,
@@ -74,10 +74,10 @@ class ActivitiesAPIController:
               response={200: DailyEntryOutputSchema, 404: dict})
     def get_daily_entry(self, request, date: str):
         """Get daily entry for a specific date"""
-        user = request.user
+        customer = request.user.customer
 
         try:
-            daily_entry = DailyEntry.objects.get(user=user, date=date)
+            daily_entry = DailyEntry.objects.get(customer=customer, date=date)
             return 200, daily_entry
         except DailyEntry.DoesNotExist:
             return 404, {"detail": "No entry found for this date"}
@@ -86,10 +86,12 @@ class ActivitiesAPIController:
               response={200: dict, 404: dict})
     def get_daily_entries_detailed(self, request, date: str):
         """Get daily entry summary for a specific date"""
-        user = request.user
+        customer = request.user.customer
 
         try:
-            daily_entry = DailyEntry.objects.get(user=user, date=date)
+            daily_entry = DailyEntry.objects.get(customer=customer, date=date)
+            diary_entry_exists = DiaryEntry.objects.filter(
+                customer=customer, entry_date=date).exists()
 
             # Group data by type
             grouped = {
@@ -202,6 +204,15 @@ class ActivitiesAPIController:
                 })
                 card_id += 1
 
+            if diary_entry_exists:
+                summary_cards.append({
+                    'id': card_id,
+                    'icon': 'book',
+                    'title': 'Diary Entry',
+                    'value': 'Logged',
+                    'color': '#D1C4E9',
+                })
+
             return 200, {
                 'id': daily_entry.id,
                 'date': str(daily_entry.date),
@@ -223,11 +234,11 @@ class HydrationAPIController:
     )
     def get_hydration_log(self, request, date: str):
         """Get hydration log for a specific date"""
-        user = request.user
+        customer = request.user.customer
 
         try:
             hydration_log = HydrationLog.objects.get(
-                user=user, date=date
+                customer=customer, date=date
             )
             return 200, hydration_log
         except HydrationLog.DoesNotExist:
@@ -237,10 +248,10 @@ class HydrationAPIController:
     def create_or_update_hydration_log(
             self, request, payload: HydrationLogInputSchema):
         """Create or update hydration log for a specific date"""
-        user = request.user
+        customer = request.user.customer
 
         hydration_log, created = HydrationLog.objects.get_or_create(
-            user=user,
+            customer=customer,
             date=payload.date,
             defaults={
                 'amount_ml': payload.amount_ml,
@@ -297,7 +308,7 @@ class MedicationAPIController:
     def get_medications_with_doses(self, request, date: str):
         """Get all medications with their dose status for a specific date"""
         medications_with_doses = self.service.get_medications_with_doses(
-            user=request.user,
+            customer=request.user.customer,
             target_date=date
         )
         return medications_with_doses
@@ -311,7 +322,7 @@ class MedicationAPIController:
 
         medication_data = payload.dict(exclude_unset=True)
         medication = self.service.create_medication(
-            user=request.user,
+            customer=request.user.customer,
             medication_data=medication_data
         )
         return 201, medication
@@ -329,7 +340,7 @@ class MedicationAPIController:
     ):
         """Update an existing medication asdasdas asdasds asdasda asdasd asdsadas sadasdas asdsa """
         medication = self.service.get_medication_by_id(
-            medication_id, request.user
+            medication_id, request.user.customer
         )
 
         if not medication:
@@ -352,7 +363,7 @@ class MedicationAPIController:
     def delete_medication(self, request, medication_id: int):
         """Soft delete a medication by marking it as inactive"""
         medication = self.service.get_medication_by_id(
-            medication_id, request.user
+            medication_id, request.user.customer
         )
 
         if not medication:
@@ -381,7 +392,7 @@ class MedicationAPIController:
         """Toggle a medication dose as taken/not taken"""
         medication = self.service.get_medication_by_id(
             payload.medication_id,
-            request.user
+            request.user.customer
         )
 
         if not medication:
@@ -416,7 +427,7 @@ class MedicationAPIController:
     def get_medication_stats(self, request, date: str):
         """Get medication completion statistics for a specific date"""
         stats = self.service.get_medication_stats(
-            user=request.user,
+            customer=request.user.customer,
             target_date=date
         )
         return stats

@@ -49,6 +49,9 @@ class CustomerProfileSchema(Schema):
     date_of_birth: Optional[date] = None
     language: str = LanguageChoices.ENGLISH
     timezone: str = TimezoneChoices.ASIA_KOLKATA
+    cycle_length: Optional[int] = None
+    period_length: Optional[int] = None
+    luteal_phase: Optional[int] = None
 
 
 class CustomerProfileUpdateSchema(Schema):
@@ -61,6 +64,9 @@ class CustomerProfileUpdateSchema(Schema):
         decimal_places=2,
         ge=0  # 'ge' means Greater than or Equal to 0
     )
+    cycle_length: Optional[int] = Field(None, ge=20, le=45)
+    period_length: Optional[int] = Field(None, ge=1, le=10)
+    luteal_phase: Optional[int] = Field(None, ge=10, le=18)
 
     @field_validator('language')
     @classmethod

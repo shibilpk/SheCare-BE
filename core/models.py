@@ -4,7 +4,6 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.conf import settings
-from django.contrib.auth import get_user_model
 
 from core.helpers import transform_string
 from core.middlewares import RequestMiddleware
@@ -142,17 +141,3 @@ class Mode(models.Model):
         return str(self.id)
 
 
-class DailyEntry(models.Model):
-    user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
-    date = models.DateField()
-    daily_data = models.JSONField(default=list, blank=True)
-    ratings = models.JSONField(default=list, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        unique_together = ("user", "date")
-        ordering = ["-date"]
-
-    def __str__(self):
-        return f"{self.user} - {self.date}"

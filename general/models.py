@@ -1,7 +1,8 @@
 from django.db import models
 
 from core.models import BaseModel
-from general.constants import LanguageChoice, OSType
+from general.constants import LanguageChoice, OSType, StaticContentType
+from django_editorjs import EditorJsField
 
 
 class AppVersion(models.Model):
@@ -49,9 +50,95 @@ class DailyTip(BaseModel):
 
 class BlogPost(BaseModel):
     title = models.CharField(max_length=255)
-    content = models.TextField()
+    short_description = models.TextField(blank=True, null=True)
+    content = EditorJsField(
+        editorjs_config={
+            "tools": {
+                "Link": {
+                    "config": {
+                        "endpoint":
+                            '/linkfetching/'
+                    }
+                },
+                "Image": {
+                    "config": {
+                        "endpoints": {
+                            "byFile": '/uploadi/',
+                            "byUrl": '/uploadi/'
+                        },
+
+                    }
+                },
+                "Attaches": {
+                    "config": {
+                        "endpoint": '/uploadf/'
+                    }
+                }
+            }
+        }
+    )
+
     author = models.CharField(max_length=255)
     published_date = models.DateField()
 
     def __str__(self):
         return self.title
+
+
+# to Save Help and support, Privacy policy and Terms and conditions content in DB
+class StaticContent(BaseModel):
+    content_type = models.CharField(
+        max_length=50, unique=True,
+        choices=StaticContentType.choices
+    )
+    content = EditorJsField()
+
+    def __str__(self):
+        return self.content_type
+
+
+class ContactUs(BaseModel):
+    name = models.CharField(max_length=255)
+    email = models.EmailField()
+    phone = models.CharField(max_length=20, blank=True)
+    subject = models.CharField(max_length=255)
+    message = models.TextField()
+    is_resolved = models.BooleanField(default=False)
+    admin_notes = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = "Contact Us"
+        verbose_name_plural = "Contact Us Submissions"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.name} - {self.subject}"
+
+
+class Feedback(BaseModel):
+    name = models.CharField(max_length=255)
+    email = models.EmailField()
+    rating = models.PositiveIntegerField(
+        help_text="Rating from 1 to 5"
+    )
+    feedback_type = models.CharField(
+        max_length=50,
+        choices=[
+            ('bug', 'Bug Report'),
+            ('feature', 'Feature Request'),
+            ('improvement', 'Improvement'),
+            ('general', 'General Feedback'),
+        ],
+        default='general'
+    )
+    message = models.TextField()
+    is_reviewed = models.BooleanField(default=False)
+    admin_notes = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = "Feedback"
+        verbose_name_plural = "Feedback Submissions"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.name} - {self.feedback_type} ({self.rating}⭐)"

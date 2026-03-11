@@ -5,12 +5,8 @@ from typing import List, Dict, Optional, Tuple
 from datetime import date
 from django.utils import timezone
 from django.db import transaction
-from django.contrib.auth import get_user_model
 
 from activities.models import Medication, MedicationLog
-
-
-User = get_user_model()
 
 
 class MedicationService:
@@ -18,22 +14,22 @@ class MedicationService:
 
     @staticmethod
     def get_medication_by_id(
-        medication_id: int, user: 'User'
+        medication_id: int, customer
     ) -> Optional[Medication]:
-        """Get a specific medication for a user"""
+        """Get a specific medication for a customer"""
         try:
-            return Medication.objects.get(id=medication_id, user=user)
+            return Medication.objects.get(id=medication_id, customer=customer)
         except Medication.DoesNotExist:
             return None
 
     @staticmethod
     @transaction.atomic
     def create_medication(
-        user: 'User', medication_data: Dict
+        customer, medication_data: Dict
     ) -> Medication:
         """Create a new medication"""
         return Medication.objects.create(
-            user=user,
+            customer=customer,
             **medication_data
         )
 
@@ -57,14 +53,14 @@ class MedicationService:
 
     @staticmethod
     def get_medications_with_doses(
-        user: 'User', target_date: date
+        customer, target_date: date
     ) -> List[Dict]:
         """
         Get all medications with dose status for a specific date
 
         Returns medications with their doses and completion status
         """
-        medications = Medication.objects.filter(user=user, is_active=True)
+        medications = Medication.objects.filter(customer=customer, is_active=True)
         result = []
 
         for med in medications:
@@ -145,7 +141,7 @@ class MedicationService:
 
     @staticmethod
     def get_medication_stats(
-        user: 'User', target_date: date
+        customer, target_date: date
     ) -> Dict:
         """
         Get medication completion statistics for a specific date
@@ -153,14 +149,14 @@ class MedicationService:
         Returns dict with total/taken doses and completion percent
         """
         # Get all active medications
-        medications = Medication.objects.filter(user=user, is_active=True)
+        medications = Medication.objects.filter(customer=customer, is_active=True)
 
         # Calculate total expected doses for the day
         total_doses = sum(med.times_per_period for med in medications)
 
         # Get all logs for this date that are marked as taken
         taken_doses = MedicationLog.objects.filter(
-            medication__user=user,
+            medication__customer=customer,
             medication__is_active=True,
             date=target_date,
             taken=True

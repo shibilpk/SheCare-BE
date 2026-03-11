@@ -1,6 +1,7 @@
 from datetime import datetime, date
 from ninja import Schema, ModelSchema, Field
 from typing import List, Dict, Optional
+from uuid import UUID
 from pydantic import validator
 from activities.models import Medication, MedicationLog
 
@@ -17,12 +18,12 @@ class DailyEntryInputSchema(Schema):
 
 
 class DailyEntryOutputSchema(Schema):
-    id: int
+    id: UUID
     date: date
     daily_data: List[Dict]
     ratings: List[Dict]
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime]
 
 
 # Hydration Schemas
@@ -34,7 +35,7 @@ class HydrationLogInputSchema(Schema):
 
 
 class HydrationLogOutputSchema(Schema):
-    id: int
+    id: UUID
     date: date
     amount_ml: int
     glass_size_ml: int
@@ -43,7 +44,7 @@ class HydrationLogOutputSchema(Schema):
     total_liters: float
     progress_percent: float
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime]
 
 
 # Hydration Content Schemas
@@ -110,7 +111,7 @@ class MedicationOutputSchema(ModelSchema):
 
 
 class MedicationWithDosesOutputSchema(Schema):
-    id: int
+    id: UUID
     name: str
     dosage: str
     frequency: str  # Human-readable frequency text
@@ -119,14 +120,14 @@ class MedicationWithDosesOutputSchema(Schema):
 
 
 class MedicationLogInputSchema(Schema):
-    medication_id: int = Field(..., gt=0)
+    medication_id: UUID = Field(...)
     date: date
     dose_index: int = Field(..., ge=0)
     taken: bool
 
 
 class MedicationLogOutputSchema(ModelSchema):
-    medication_id: int
+    medication_id: UUID
 
     class Meta:
         model = MedicationLog

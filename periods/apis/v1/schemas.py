@@ -35,10 +35,16 @@ class PeriodDetailedOutSchema(Schema):
     cycle_length: int | None
 
 
+class PregnancyChanceSchema(Schema):
+    """Schema for pregnancy chance with percentage"""
+    level: str  # 'low', 'medium', or 'high'
+    percentage: int  # 0-100
+
+
 class CurrentPeriodSchema(Schema):
     active_period: PeriodDetailedOutSchema | None
     is_fertile: bool
-    pregnancy_chance: str  # 'low', 'medium', or 'high'
+    pregnancy_chance: PregnancyChanceSchema | None  # Now returns object with level and percentage
     next_period_date: date | None
     ovulation_date: date | None
     fertile_window_start: date | None

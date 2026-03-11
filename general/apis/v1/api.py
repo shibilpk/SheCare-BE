@@ -1,5 +1,10 @@
 from .controllers import (
-    GeneralAPIController)
+    GeneralAPIController, BlogAPIController, StaticContentAPIController, ContactFeedbackAPIController)
 
 # This list makes it easy for the central API to find them
-register_controllers = [GeneralAPIController]
+register_controllers = [
+    GeneralAPIController,
+    BlogAPIController,
+    StaticContentAPIController,
+    ContactFeedbackAPIController
+]

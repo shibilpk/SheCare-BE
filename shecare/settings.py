@@ -12,6 +12,7 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', cast=Csv())
 INSTALLED_APPS = [
     'ninja_extra',
     'ninja_jwt',
+    'django_editorjs',
 
     'django.contrib.admin',
     'django.contrib.auth',

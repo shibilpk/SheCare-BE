@@ -17,11 +17,11 @@ def calculate_main_card_display(profile, active_period):
     if active_period:
         start_str = active_period.start_date.strftime('%b %d')
         end_str = active_period.end_date.strftime('%b %d, %Y')
-
+        period_day = (today - active_period.start_date.date()).days + 1
         return {
             'card_status': 'period_active',
-            'card_label': 'Current Period',
-            'card_value': 'In Progress',
+            'card_label': 'Period',
+            'card_value': f"Day {period_day}",
             'card_subtitle': f"{start_str} - {end_str}",
             'card_button_text': 'End Period',
         }
@@ -159,10 +159,13 @@ def get_current_period_status(profile):
     # Calculate main card display data
     card_data = calculate_main_card_display(profile, active_period)
 
+    # Get pregnancy chance with level and percentage
+    pregnancy_chance_data = profile.get_pregnancy_chance_with_percentage()
+
     return {
         'active_period': active_period,
         'is_fertile': profile.is_fertile_today,
-        'pregnancy_chance': profile.pregnancy_chance_today,
+        'pregnancy_chance': pregnancy_chance_data,  # Now returns {'level': str, 'percentage': int}
         'next_period_date': profile.next_period_start_date,
         'ovulation_date': profile.ovulation_date,
         'fertile_window_start': profile.fertile_window_start,

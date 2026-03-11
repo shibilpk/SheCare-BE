@@ -182,36 +182,47 @@ class PeriodProfile(models.Model):
             self.fertile_window_start <= today <= self.fertile_window_end
         )
 
-    @property
-    def pregnancy_chance_today(self):
+    def get_pregnancy_chance_with_percentage(self):
         """
-        Calculate pregnancy chance for today based on cycle phase.
-        Returns: 'high', 'medium', or 'low'
+        Calculate pregnancy chance with percentage for today
+        Returns: dict with 'level' ('high', 'medium', 'low') and 'percentage' (0-100)
         """
         if not self.ovulation_date or not self.fertile_window_start or not self.fertile_window_end:
-            return 'low'
+            return {'level': 'low', 'percentage': 5}
 
         today = timezone.now().date()
 
-        # High chance: During fertile window (especially 2 days before ovulation to ovulation day)
-        if self.fertile_window_start <= today <= self.fertile_window_end:
-            # Peak fertility: 2 days before to 1 day after ovulation
-            peak_start = self.ovulation_date - timedelta(days=2)
-            peak_end = self.ovulation_date + timedelta(days=1)
-            if peak_start <= today <= peak_end:
-                return 'high'
+        # High chance: Peak fertility (2 days before to 1 day after ovulation)
+        peak_start = self.ovulation_date - timedelta(days=2)
+        peak_end = self.ovulation_date + timedelta(days=1)
+        if peak_start <= today <= peak_end:
+            # Calculate percentage based on proximity to ovulation
+            days_to_ovulation = abs((self.ovulation_date - today).days)
+            if days_to_ovulation == 0:
+                percentage = 90  # Ovulation day
+            elif days_to_ovulation == 1:
+                percentage = 85  # 1 day before/after ovulation
             else:
-                # Early fertile window (3-5 days before ovulation)
-                return 'medium'
+                percentage = 75  # 2 days before ovulation
+            return {'level': 'high', 'percentage': percentage}
+
+        # Medium chance: Early fertile window (3-5 days before ovulation)
+        if self.fertile_window_start <= today <= self.fertile_window_end:
+            days_to_ovulation = (self.ovulation_date - today).days
+            if days_to_ovulation >= 3:
+                percentage = 50  # 3-5 days before ovulation
+            else:
+                percentage = 60  # 2 days before ovulation
+            return {'level': 'medium', 'percentage': percentage}
 
         # Medium chance: 1-2 days outside fertile window
         medium_window_start = self.fertile_window_start - timedelta(days=2)
         medium_window_end = self.fertile_window_end + timedelta(days=2)
         if medium_window_start <= today <= medium_window_end:
-            return 'medium'
+            return {'level': 'medium', 'percentage': 30}
 
         # Low chance: During period or well outside fertile window
-        return 'low'
+        return {'level': 'low', 'percentage': 5}
 
 
 class Period(BaseModel):

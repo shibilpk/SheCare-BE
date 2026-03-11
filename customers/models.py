@@ -80,9 +80,17 @@ class Customer(BaseModel, CrudUrlMixin):
                 latest.weight), 'unit': latest.unit} if latest else None
 
     def get_profile_data(self, request):
+        # Get period profile data if it exists
+        period_data = {}
+        if hasattr(self, 'period_profile'):
+            profile = self.period_profile
+            period_data = {
+                "cycle_length": profile.avg_cycle_length,
+                "period_length": profile.avg_period_length,
+                "luteal_phase": profile.luteal_phase_length,
+            }
 
         return {
-
             "email": self.user.email,
             "name": self.user.get_full_name(),
             "phone": str(self.user.phone) if self.user.phone else None,
@@ -95,6 +103,7 @@ class Customer(BaseModel, CrudUrlMixin):
             "date_of_birth": self.date_of_birth,
             "language": self.language,
             "timezone": self.timezone,
+            **period_data,
         }
 
     def get_bmi_data(self):
@@ -138,7 +147,7 @@ class WeightEntry(RelatedModal):
         ordering = ['-entry_date', '-time_stamp']
 
 
-class CustomerDiaryEntry(BaseModel):
+class DiaryEntry(BaseModel):
     customer = models.ForeignKey(
         Customer, on_delete=models.CASCADE, related_name="diary_entries"
     )
@@ -194,3 +203,18 @@ class Reminder(BaseModel):
     class Meta:
         unique_together = ['customer', 'reminder_type']
         ordering = ['id']
+
+
+class DailyEntry(BaseModel):
+    customer = models.ForeignKey(
+        'customers.Customer', on_delete=models.CASCADE, null=True)
+    date = models.DateField()
+    daily_data = models.JSONField(default=list, blank=True)
+    ratings = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        unique_together = ("customer", "date")
+        ordering = ["-date"]
+
+    def __str__(self):
+        return f"{self.customer} - {self.date}"

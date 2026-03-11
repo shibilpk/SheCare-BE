@@ -2,6 +2,7 @@
 from datetime import date
 from ninja import Schema
 from typing import List
+from uuid import UUID
 
 
 class DetailsSuccessSchema(Schema):
@@ -30,3 +31,56 @@ class DailyTipSchema(Schema):
     date: date
     short_description: str
     long_description: str
+
+
+class StaticContentSchema(Schema):
+    content_type: str
+    content: dict
+
+
+class ContactUsInSchema(Schema):
+    name: str
+    email: str
+    phone: str = ""
+    subject: str
+    message: str
+
+
+class ContactUsOutSchema(Schema):
+    id: UUID
+    name: str
+    email: str
+    phone: str
+    subject: str
+    message: str
+    is_resolved: bool
+    created_at: date
+
+
+class FeedbackInSchema(Schema):
+    name: str
+    email: str
+    rating: int
+    feedback_type: str = "general"
+    message: str
+
+
+class FeedbackOutSchema(Schema):
+    id: UUID
+    name: str
+    email: str
+    rating: int
+    feedback_type: str
+    message: str
+    is_reviewed: bool
+    created_at: date
+
+
+class BlogPostSchema(Schema):
+    id: UUID
+    title: str
+    short_description: str = None
+    content: dict
+    author: str
+    published_date: date
+    created_at: date

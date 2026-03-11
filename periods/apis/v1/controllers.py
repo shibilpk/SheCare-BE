@@ -13,6 +13,7 @@ from .schemas import (
     PeriodOutSchema,
     PeriodStartSchema,
     PeriodEndSchema,
+    PregnancyChanceSchema,
 )
 
 
@@ -113,3 +114,23 @@ class PeriodAPIController:
         else:
             raise HttpError(404, "No period profile found for customer")
         return get_current_period_status(profile)
+
+    @route.get(
+        "pregnancy-chance/",
+        response={200: PregnancyChanceSchema, },
+    )
+    def get_pregnancy_chance(self, request):
+        """
+        Get pregnancy chance with percentage for the authenticated customer
+        Returns level (low/medium/high) and percentage (0-100)
+        """
+        user = request.user
+        customer = user.customer
+        if hasattr(customer, 'period_profile'):
+            profile = customer.period_profile
+        else:
+            raise HttpError(404, "No period profile found for customer")
+
+        # Get pregnancy chance with percentage
+        chance_data = profile.get_pregnancy_chance_with_percentage()
+        return chance_data

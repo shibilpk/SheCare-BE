@@ -5,7 +5,7 @@ from django.db import transaction
 from accounts.apis.v1.permissions import IsCustomer
 from accounts.models import User, UserOtp
 from core.helpers import encrypt_small
-from customers.models import Customer, CustomerDiaryEntry, WeightEntry, Reminder
+from customers.models import Customer, DiaryEntry, WeightEntry, Reminder
 from customers.constants import (
     LanguageChoices,
     TimezoneChoices,
@@ -153,6 +153,17 @@ class CustomerAPIController:
         user = request.user
         customer = user.customer
         customer_dict = payload.dict(exclude_unset=True)
+
+        # Extract period profile fields
+        period_fields = {}
+        if 'cycle_length' in customer_dict:
+            period_fields['avg_cycle_length'] = customer_dict.pop('cycle_length')
+        if 'period_length' in customer_dict:
+            period_fields['avg_period_length'] = customer_dict.pop('period_length')
+        if 'luteal_phase' in customer_dict:
+            period_fields['luteal_phase_length'] = customer_dict.pop('luteal_phase')
+
+        # Extract user fields
         user_dict = customer_dict.pop("user", {})
         if user_dict:
             for key, value in user_dict.items():
@@ -167,6 +178,16 @@ class CustomerAPIController:
                 setattr(customer, key, value)
             customer.save(update_fields=customer_dict.keys())
 
+        # Update period profile if period fields are provided
+        if period_fields:
+            from periods.models import PeriodProfile
+            period_profile, _ = PeriodProfile.objects.get_or_create(
+                customer=customer
+            )
+            for key, value in period_fields.items():
+                setattr(period_profile, key, value)
+            period_profile.save(update_fields=period_fields.keys())
+
         return {
             "profile": customer.get_profile_data(request),
             "detail": {
@@ -175,7 +196,7 @@ class CustomerAPIController:
             },
         }
 
-    @http_patch(
+    @http_post(
         "profile/wight-entry/",
         response={
             200: CustomerProfileUpdateOutSchema,
@@ -389,7 +410,7 @@ class CustomerDiaryAPIController:
         user = request.user
         customer = user.customer
 
-        _, created = CustomerDiaryEntry.objects.update_or_create(
+        _, created = DiaryEntry.objects.update_or_create(
             customer=customer,
             entry_date=payload.entry_date,
             defaults={"content": payload.content},
@@ -417,7 +438,7 @@ class CustomerDiaryAPIController:
         user = request.user
         customer = user.customer
 
-        diary_entry = CustomerDiaryEntry.objects.filter(
+        diary_entry = DiaryEntry.objects.filter(
             customer=customer,
             entry_date=entry_date
         ).first()

@@ -1,13 +1,14 @@
 from django.db import models
-from django.contrib.auth import get_user_model
+
+from core.models import BaseModel
 
 # Create your models here.
 
 
-class HydrationLog(models.Model):
+class HydrationLog(BaseModel):
     """Model to track water intake for users"""
-    user = models.ForeignKey(
-        get_user_model(), on_delete=models.CASCADE, related_name='hydration_logs')
+    customer = models.ForeignKey(
+        'customers.Customer', on_delete=models.CASCADE, related_name='hydration_logs', null=True)
     date = models.DateField(db_index=True)
     amount_ml = models.IntegerField(
         default=0, help_text="Total water intake in milliliters")
@@ -15,18 +16,16 @@ class HydrationLog(models.Model):
         default=250, help_text="Default glass size in milliliters")
     daily_goal_ml = models.IntegerField(
         default=2000, help_text="Daily water intake goal in milliliters")
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ("user", "date")
+        unique_together = ("customer", "date")
         ordering = ["-date"]
         indexes = [
-            models.Index(fields=['user', 'date']),
+            models.Index(fields=['customer', 'date']),
         ]
 
     def __str__(self):
-        return f"{self.user} - {self.date} - {self.amount_ml}ml"
+        return f"{self.customer} - {self.date} - {self.amount_ml}ml"
 
     @property
     def glasses_count(self):
@@ -74,7 +73,7 @@ class HydrationContent(models.Model):
         return f"{self.get_content_type_display()}: {self.text[:50]}"
 
 
-class Medication(models.Model):
+class Medication(BaseModel):
     """Model to store user medications"""
     FREQUENCY_PERIOD_CHOICES = [
         ('daily', 'Daily'),
@@ -83,8 +82,8 @@ class Medication(models.Model):
         ('once', 'One Time Only'),
     ]
 
-    user = models.ForeignKey(
-        get_user_model(), on_delete=models.CASCADE, related_name='medications')
+    customer = models.ForeignKey(
+        'customers.Customer', on_delete=models.CASCADE, related_name='medications', null=True)
     name = models.CharField(max_length=200, help_text="Medication name")
     dosage = models.CharField(
         max_length=100, help_text="Dosage (e.g., 1 tablet, 400mcg)")
@@ -100,17 +99,15 @@ class Medication(models.Model):
         null=True, blank=True, help_text="When medication started")
     end_date = models.DateField(
         null=True, blank=True, help_text="When medication ended")
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['user', 'is_active']),
+            models.Index(fields=['customer', 'is_active']),
         ]
 
     def __str__(self):
-        return f"{self.user} - {self.name} ({self.dosage})"
+        return f"{self.customer} - {self.name} ({self.dosage})"
 
     @property
     def frequency_text(self):
@@ -138,7 +135,7 @@ class Medication(models.Model):
             return [f"Dose {i+1}" for i in range(self.times_per_period)]
 
 
-class MedicationLog(models.Model):
+class MedicationLog(BaseModel):
     """Model to track medication doses taken"""
     medication = models.ForeignKey(
         Medication, on_delete=models.CASCADE, related_name='logs')
@@ -151,8 +148,6 @@ class MedicationLog(models.Model):
         default=False, help_text="Whether dose was taken")
     taken_at = models.DateTimeField(
         null=True, blank=True, help_text="When dose was marked as taken")
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = ('medication', 'date', 'dose_index')
