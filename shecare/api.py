@@ -76,6 +76,7 @@ LOCAL_APPS = [
     'general.apis.v1.api',
     'periods.apis.v1.api',
     'activities.apis.v1.api',
+    'pregnancies.apis.v1.api',
 ]
 for app_path in LOCAL_APPS:
     try:

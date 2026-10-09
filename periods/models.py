@@ -278,3 +278,8 @@ class Period(BaseModel):
             start_date__lte=today,
             end_date__gte=today
         ).order_by('-start_date').first()
+
+    @classmethod
+    def get_last_period(cls, customer):
+        """Get the most recent period for a customer"""
+        return cls.objects.filter(customer=customer).order_by('-start_date').first()

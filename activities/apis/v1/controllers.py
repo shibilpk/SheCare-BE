@@ -70,7 +70,7 @@ class ActivitiesAPIController:
 
         return daily_entry
 
-    @http_get('daily-entries/{date}',
+    @http_get('daily-entries/{date}/',
               response={200: DailyEntryOutputSchema, 404: dict})
     def get_daily_entry(self, request, date: str):
         """Get daily entry for a specific date"""
@@ -82,7 +82,7 @@ class ActivitiesAPIController:
         except DailyEntry.DoesNotExist:
             return 404, {"detail": "No entry found for this date"}
 
-    @http_get('daily-entries-detailed/{date}',
+    @http_get('daily-entries-detailed/{date}/',
               response={200: dict, 404: dict})
     def get_daily_entries_detailed(self, request, date: str):
         """Get daily entry summary for a specific date"""
@@ -218,7 +218,6 @@ class ActivitiesAPIController:
                 'date': str(daily_entry.date),
                 'summary_cards': summary_cards,
                 'created_at': daily_entry.created_at.isoformat(),
-                'updated_at': daily_entry.updated_at.isoformat(),
             }
         except DailyEntry.DoesNotExist:
             return 404, {"detail": "No entry found for this date"}
@@ -302,7 +301,7 @@ class MedicationAPIController:
         self.service = MedicationService()
 
     @http_get(
-        'medications/by-date/{date}',
+        'medications/by-date/{date}/',
         response=List[MedicationWithDosesOutputSchema]
     )
     def get_medications_with_doses(self, request, date: str):
@@ -328,7 +327,7 @@ class MedicationAPIController:
         return 201, medication
 
     @http_put(
-        'medications/{medication_id}',
+        'medications/{medication_id}/',
         response={
             200: MedicationOutputSchema,
             404: ErrorResponseSchema,
@@ -357,7 +356,7 @@ class MedicationAPIController:
         return 200, updated_medication
 
     @http_delete(
-        'medications/{medication_id}',
+        'medications/{medication_id}/',
         response={200: dict, 404: ErrorResponseSchema}
     )
     def delete_medication(self, request, medication_id: int):
@@ -423,7 +422,7 @@ class MedicationAPIController:
                 "detail": str(e)
             }
 
-    @http_get('medication-stats/{date}', response=MedicationStatsSchema)
+    @http_get('medication-stats/{date}/', response=MedicationStatsSchema)
     def get_medication_stats(self, request, date: str):
         """Get medication completion statistics for a specific date"""
         stats = self.service.get_medication_stats(
@@ -438,7 +437,7 @@ class NutritionAPIController:
     """Controller for nutrition tracking endpoints"""
 
     @http_get(
-        'summary/{date}',
+        'summary/{date}/',
         response={200: NutritionSummarySchema, 400: ErrorResponseSchema}
     )
     def get_nutrition_summary(self, request, date: str):

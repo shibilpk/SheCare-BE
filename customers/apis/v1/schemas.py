@@ -1,19 +1,20 @@
 from decimal import Decimal
-from ninja import Schema, Form, File
-from pydantic import EmailStr, Field, StrictFloat
-from typing import List, Optional, Annotated
+from ninja import Schema, ModelSchema
+from pydantic import EmailStr, Field
+from typing import List, Optional
 from pydantic import field_validator
-from ninja.files import UploadedFile
 from datetime import date
-from pydantic import condecimal
 
 from customers.constants import WeightUnisChoices, LanguageChoices, TimezoneChoices
+from customers.models import WeightEntry, DiaryEntry
 from general.apis.v1.schemas import DetailsSuccessSchema
 
 
-class WeightEntryOutSchema(Schema):
-    weight: Decimal
-    unit: str
+# Using ModelSchema for WeightEntry
+class WeightEntryOutSchema(ModelSchema):
+    class Meta:
+        model = WeightEntry
+        fields = ['weight', 'unit']
 
 
 class CustomerRegistrationSchema(Schema):
@@ -62,7 +63,7 @@ class CustomerProfileUpdateSchema(Schema):
         None,
         max_digits=5,
         decimal_places=2,
-        ge=0  # 'ge' means Greater than or Equal to 0
+        ge=0
     )
     cycle_length: Optional[int] = Field(None, ge=20, le=45)
     period_length: Optional[int] = Field(None, ge=1, le=10)
@@ -81,12 +82,6 @@ class CustomerProfileUpdateSchema(Schema):
         if v is not None and v not in TimezoneChoices.values:
             raise ValueError(f"timezone must be one of {TimezoneChoices.values}")
         return v
-
-    # @field_validator("height")
-    # def height_must_be_real(cls, v):
-    #     if v is not None and (v != v):  # NaN check
-    #         raise ValueError("height must be a valid number")
-    #     return v
 
     @field_validator('height', mode='before')
     @classmethod
@@ -110,7 +105,7 @@ class WeightEntryInSchema(Schema):
         ...,
         max_digits=5,
         decimal_places=2,
-        ge=0  # 'ge' means Greater than or Equal to 0
+        ge=0
     )
     weight_date: date
     weight_unit: str
@@ -137,9 +132,11 @@ class HealthAnalysisResponseSchema(Schema):
     profile: Optional[CustomerProfileSchema] = None
 
 
-class CustomerDiaryEntryInOutSchema(Schema):
-    entry_date: date
-    content: str
+# Using ModelSchema for DiaryEntry
+class CustomerDiaryEntryInOutSchema(ModelSchema):
+    class Meta:
+        model = DiaryEntry
+        fields = ['entry_date', 'content']
 
 
 class PreferencesUpdateSchema(Schema):
