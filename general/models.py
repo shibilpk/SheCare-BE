@@ -142,3 +142,22 @@ class Feedback(BaseModel):
 
     def __str__(self):
         return f"{self.name} - {self.feedback_type} ({self.rating}⭐)"
+
+
+class HealthTip(models.Model):
+    """General wellness tips shown on the Tips screen (admin managed)."""
+    category = models.CharField(max_length=50)
+    title = models.CharField(max_length=150)
+    description = models.TextField()
+    icon = models.CharField(
+        max_length=50, default='heart',
+        help_text="Fontello glyph name used by the app")
+    color = models.CharField(max_length=7, default='#EC4899')
+    order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['order', 'id']
+
+    def __str__(self):
+        return self.title

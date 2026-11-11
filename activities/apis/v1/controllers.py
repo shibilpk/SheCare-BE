@@ -1,7 +1,12 @@
+from ninja.errors import HttpError
 from ninja_extra import (
     api_controller, http_get, http_post, http_put, http_delete
 )
+from datetime import date as date_type, timedelta
+from general.apis.v1.schemas import SuccessSchema
+from accounts.apis.v1.permissions import IsCustomer
 from typing import List
+from uuid import UUID
 from django.db.models import Q, Sum
 
 from activities.constants import (
@@ -9,6 +14,7 @@ from activities.constants import (
     INTIMACY_OPTIONS, FLOW_OPTIONS)
 from activities.apis.v1.schemas import (
     DailyEntryInputSchema, DailyEntryOutputSchema,
+    CalendarMarkersOutputSchema,
     HydrationLogInputSchema, HydrationLogOutputSchema,
     HydrationContentOutputSchema,
     MedicationInputSchema, MedicationOutputSchema,
@@ -18,16 +24,149 @@ from activities.apis.v1.schemas import (
     NutritionLogInputSchema, NutritionLogOutputSchema,
     NutritionGoalInputSchema, NutritionGoalOutputSchema,
     FoodSuggestionOutputSchema, NutritionSummarySchema,
-    FoodSearchResultSchema)
+    FoodSearchResultSchema,
+    ExerciseTypeOutputSchema, ExerciseLogInputSchema, ExerciseLogOutputSchema,
+    ExerciseWeekSummarySchema,
+    SleepLogInputSchema, SleepLogOutputSchema, SleepLogListSchema)
 from customers.models import DailyEntry, DiaryEntry
 from activities.models import (
     HydrationLog, HydrationContent,
-    NutritionLog, NutritionGoal, FoodSuggestion)
-from activities.services import MedicationService
+    NutritionLog, NutritionGoal, FoodSuggestion,
+    ExerciseType, ExerciseLog, SleepLog)
+from activities.services import MedicationService, CalendarMarkerService
 
 
 @api_controller("activities/", tags=["Daily Actions"])
 class ActivitiesAPIController:
+
+    _LOOKUPS = {
+        'mood': {item['id']: item for item in MOODS},
+        'symptom': {item['id']: item for item in SYMPTOMS},
+        'activity': {item['id']: item for item in ACTIVITIES},
+        'intimacy': {item['id']: item for item in INTIMACY_OPTIONS},
+        'flow': {item['id']: item for item in FLOW_OPTIONS},
+    }
+
+    _DIARY_CARD = {
+        'icon': 'book',
+        'title': 'Diary Entry',
+        'value': 'Logged',
+        'color': '#D1C4E9',
+    }
+
+    # ---- Summary card helpers for daily-entries-detailed ----
+
+    @staticmethod
+    def _pregnancy_chance(customer, date_str):
+        """Pregnancy chance for the given date, or None without a period profile."""
+        profile = getattr(customer, 'period_profile', None)
+        if profile is None:
+            return None
+        try:
+            target_date = date_type.fromisoformat(date_str)
+        except ValueError:
+            return None
+        return profile.get_pregnancy_chance_with_percentage(target_date)
+
+    @staticmethod
+    def _plural(count, singular, plural=None):
+        return singular if count == 1 else (plural or f"{singular}s")
+
+    @staticmethod
+    def _group_entry(daily_entry):
+        """Selected option ids per category for a daily entry (or none)."""
+        return {
+            'mood': daily_entry.moods if daily_entry else [],
+            'symptom': daily_entry.symptoms if daily_entry else [],
+            'activity': daily_entry.activities if daily_entry else [],
+            'intimacy': daily_entry.intimacy if daily_entry else [],
+            'flow': daily_entry.flow if daily_entry else [],
+        }
+
+    @classmethod
+    def _emoji_value(cls, items, kind):
+        """First 5 emojis of the given items, space separated."""
+        lookup = cls._LOOKUPS[kind]
+        emojis = [
+            lookup.get(item_id, {}).get('emoji') for item_id in items]
+        return ' '.join([e for e in emojis if e][:5])
+
+    @classmethod
+    def _mood_card(cls, grouped):
+        items = grouped['mood']
+        if not items:
+            return None
+        return {
+            'icon': '😊',
+            'title': f"{len(items)} {cls._plural(len(items), 'Mood')} Added",
+            'value': cls._emoji_value(items, 'mood'),
+            'color': '#FFE0B2',
+        }
+
+    @classmethod
+    def _symptom_card(cls, grouped):
+        items = grouped['symptom']
+        if not items:
+            return None
+        return {
+            'icon': 'thermometer',
+            'title': (
+                f"{len(items)} {cls._plural(len(items), 'Symptom')} Tracked"),
+            'value': f"{len(items)} logged",
+            'color': '#FFCDD2',
+        }
+
+    @classmethod
+    def _activity_card(cls, grouped):
+        items = grouped['activity']
+        if not items:
+            return None
+        return {
+            'icon': '💪',
+            'title': (
+                f"{len(items)} "
+                f"{cls._plural(len(items), 'Activity', 'Activities')}"),
+            'value': cls._emoji_value(items, 'activity'),
+            'color': '#C8E6C9',
+        }
+
+    @classmethod
+    def _single_choice_card(
+            cls, grouped, kind, title, default_icon, default_color):
+        """Card for types where only the first selected option is shown."""
+        items = grouped[kind]
+        if not items:
+            return None
+        data = cls._LOOKUPS[kind].get(items[0], {})
+        return {
+            'icon': data.get('emoji', default_icon),
+            'title': title,
+            'value': data.get('label', 'Logged'),
+            'color': data.get('color', default_color),
+        }
+
+    @classmethod
+    def _intimacy_card(cls, grouped):
+        return cls._single_choice_card(
+            grouped, 'intimacy', 'Intimacy', '❤️', '#F8BBD0')
+
+    @classmethod
+    def _flow_card(cls, grouped):
+        return cls._single_choice_card(
+            grouped, 'flow', 'Flow', '💧', '#E1F5FE')
+
+    @classmethod
+    def _ratings_card(cls, ratings):
+        if not ratings:
+            return None
+        average = sum(r.get('rating', 0) for r in ratings) / len(ratings)
+        return {
+            'icon': 'star',
+            'title': f"{len(ratings)} {cls._plural(len(ratings), 'Rating')}",
+            'rating': round(average, 1),
+            'color': '#FFF9C4',
+        }
+
     @http_get('daily-actions/')
     def get_all_daily_actions(self):
         return {
@@ -52,18 +191,16 @@ class ActivitiesAPIController:
         """Create or update a daily entry for the authenticated user"""
         customer = request.user.customer
 
-        # Transform daily_data to list of dicts
-        daily_data_list = [
-            {"id": item.id, "type": item.type}
-            for item in payload.daily_data
-        ]
-
         # Get or create the daily entry for this date
         daily_entry, _ = DailyEntry.objects.update_or_create(
             customer=customer,
             date=payload.date,
             defaults={
-                'daily_data': daily_data_list,
+                'moods': payload.moods,
+                'symptoms': payload.symptoms,
+                'activities': payload.activities,
+                'intimacy': payload.intimacy,
+                'flow': payload.flow,
                 'ratings': payload.ratings,
             }
         )
@@ -82,145 +219,65 @@ class ActivitiesAPIController:
         except DailyEntry.DoesNotExist:
             return 404, {"detail": "No entry found for this date"}
 
+    MAX_CALENDAR_RANGE_DAYS = 400
+
+    @http_get('calendar-markers/', response={200: CalendarMarkersOutputSchema})
+    def get_calendar_markers(
+            self, request, start_date: date_type, end_date: date_type):
+        """
+        Dates to mark on the calendar between start_date and end_date:
+        period, future_period, ovulation, fertile, pregnant (due date),
+        medication, love (intimacy) and diary.
+        """
+        if end_date < start_date:
+            raise HttpError(400, "end_date must not be before start_date")
+        if (end_date - start_date).days > self.MAX_CALENDAR_RANGE_DAYS:
+            raise HttpError(
+                400,
+                f"Range must not exceed {self.MAX_CALENDAR_RANGE_DAYS} days")
+
+        return CalendarMarkerService.get_markers(
+            request.user.customer, start_date, end_date)
+
     @http_get('daily-entries-detailed/{date}/',
-              response={200: dict, 404: dict})
+              response={200: dict})
     def get_daily_entries_detailed(self, request, date: str):
         """Get daily entry summary for a specific date"""
         customer = request.user.customer
 
-        try:
-            daily_entry = DailyEntry.objects.get(customer=customer, date=date)
-            diary_entry_exists = DiaryEntry.objects.filter(
-                customer=customer, entry_date=date).exists()
+        daily_entry = DailyEntry.objects.filter(
+            customer=customer, date=date).first()
+        diary_entry_exists = DiaryEntry.objects.filter(
+            customer=customer, entry_date=date).exists()
 
-            # Group data by type
-            grouped = {
-                'mood': [],
-                'symptom': [],
-                'activity': [],
-                'intimacy': [],
-                'flow': [],
-            }
+        ratings = daily_entry.ratings if daily_entry else []
+        grouped = self._group_entry(daily_entry)
 
-            for item in daily_entry.daily_data:
-                item_type = item.get('type')
-                if item_type in grouped:
-                    grouped[item_type].append(item)
+        cards = [
+            self._mood_card(grouped),
+            self._symptom_card(grouped),
+            self._activity_card(grouped),
+            self._intimacy_card(grouped),
+            self._flow_card(grouped),
+            self._ratings_card(ratings),
+        ]
+        if diary_entry_exists:
+            cards.append(self._DIARY_CARD)
 
-            # Create lookup dictionaries
-            lookups = {
-                'mood': {item['id']: item for item in MOODS},
-                'symptom': {item['id']: item for item in SYMPTOMS},
-                'activity': {item['id']: item for item in ACTIVITIES},
-                'intimacy': {item['id']: item for item in INTIMACY_OPTIONS},
-                'flow': {item['id']: item for item in FLOW_OPTIONS},
-            }
+        # Drop empty sections and number the remaining cards sequentially
+        summary_cards = [
+            {'id': card_id, **card}
+            for card_id, card in enumerate(filter(None, cards), start=1)
+        ]
 
-            # Build summary cards
-            summary_cards = []
-            card_id = 1
-
-            # Moods summary
-            if grouped['mood']:
-                mood_names = []
-                for item in grouped['mood']:
-                    mood_data = lookups['mood'].get(item.get('id'), {})
-                    if mood_data.get('emoji'):
-                        mood_names.append(mood_data['emoji'])
-
-                summary_cards.append({
-                    'id': card_id,
-                    'icon': '😊',
-                    'title': f"{len(grouped['mood'])} Mood{'s' if len(grouped['mood']) > 1 else ''} Added",
-                    'value': ' '.join(mood_names[:5]),  # Show first 5 emojis
-                    'color': '#FFE0B2',
-                })
-                card_id += 1
-
-            # Symptoms summary
-            if grouped['symptom']:
-                summary_cards.append({
-                    'id': card_id,
-                    'icon': 'thermometer',
-                    'title': f"{len(grouped['symptom'])} Symptom{'s' if len(grouped['symptom']) > 1 else ''} Tracked",
-                    'value': f"{len(grouped['symptom'])} logged",
-                    'color': '#FFCDD2',
-                })
-                card_id += 1
-
-            # Activities summary
-            if grouped['activity']:
-                activity_emojis = []
-                for item in grouped['activity']:
-                    activity_data = lookups['activity'].get(item.get('id'), {})
-                    if activity_data.get('emoji'):
-                        activity_emojis.append(activity_data['emoji'])
-
-                summary_cards.append({
-                    'id': card_id,
-                    'icon': '💪',
-                    'title': f"{len(grouped['activity'])} Activit{'ies' if len(grouped['activity']) > 1 else 'y'}",
-                    'value': ' '.join(activity_emojis[:5]),
-                    'color': '#C8E6C9',
-                })
-                card_id += 1
-
-            # Intimacy summary
-            if grouped['intimacy']:
-                intimacy_data = lookups['intimacy'].get(
-                    grouped['intimacy'][0].get('id'), {})
-                summary_cards.append({
-                    'id': card_id,
-                    'icon': intimacy_data.get('emoji', '❤️'),
-                    'title': 'Intimacy',
-                    'value': intimacy_data.get('label', 'Logged'),
-                    'color': intimacy_data.get('color', '#F8BBD0'),
-                })
-                card_id += 1
-
-            # Flow summary
-            if grouped['flow']:
-                flow_data = lookups['flow'].get(
-                    grouped['flow'][0].get('id'), {})
-                summary_cards.append({
-                    'id': card_id,
-                    'icon': flow_data.get('emoji', '💧'),
-                    'title': 'Flow',
-                    'value': flow_data.get('label', 'Logged'),
-                    'color': flow_data.get('color', '#E1F5FE'),
-                })
-                card_id += 1
-
-            # Ratings summary
-            if daily_entry.ratings:
-                avg_rating = sum(r.get('rating', 0)
-                                 for r in daily_entry.ratings) / len(daily_entry.ratings)
-                summary_cards.append({
-                    'id': card_id,
-                    'icon': 'star',
-                    'title': f"{len(daily_entry.ratings)} Rating{'s' if len(daily_entry.ratings) > 1 else ''}",
-                    'rating': round(avg_rating, 1),
-                    'color': '#FFF9C4',
-                })
-                card_id += 1
-
-            if diary_entry_exists:
-                summary_cards.append({
-                    'id': card_id,
-                    'icon': 'book',
-                    'title': 'Diary Entry',
-                    'value': 'Logged',
-                    'color': '#D1C4E9',
-                })
-
-            return 200, {
-                'id': daily_entry.id,
-                'date': str(daily_entry.date),
-                'summary_cards': summary_cards,
-                'created_at': daily_entry.created_at.isoformat(),
-            }
-        except DailyEntry.DoesNotExist:
-            return 404, {"detail": "No entry found for this date"}
+        return 200, {
+            'id': daily_entry.id if daily_entry else None,
+            'date': str(daily_entry.date) if daily_entry else date,
+            'summary_cards': summary_cards,
+            'pregnancy_chance': self._pregnancy_chance(customer, date),
+            'created_at': (
+                daily_entry.created_at.isoformat() if daily_entry else None),
+        }
 
 
 @api_controller("hydration/", tags=["Hydration"])
@@ -228,7 +285,7 @@ class HydrationAPIController:
 
     # Hydration Endpoints
     @http_get(
-        'hydration/{date}',
+        'hydration/{date}/',
         response={200: HydrationLogOutputSchema, 404: dict}
     )
     def get_hydration_log(self, request, date: str):
@@ -335,7 +392,7 @@ class MedicationAPIController:
         }
     )
     def update_medication(
-        self, request, medication_id: int, payload: MedicationInputSchema
+        self, request, medication_id: UUID, payload: MedicationInputSchema
     ):
         """Update an existing medication asdasdas asdasds asdasda asdasd asdsadas sadasdas asdsa """
         medication = self.service.get_medication_by_id(
@@ -359,7 +416,7 @@ class MedicationAPIController:
         'medications/{medication_id}/',
         response={200: dict, 404: ErrorResponseSchema}
     )
-    def delete_medication(self, request, medication_id: int):
+    def delete_medication(self, request, medication_id: UUID):
         """Soft delete a medication by marking it as inactive"""
         medication = self.service.get_medication_by_id(
             medication_id, request.user.customer
@@ -374,7 +431,7 @@ class MedicationAPIController:
         self.service.soft_delete_medication(medication)
         return 200, {
             "message": "Medication deleted successfully",
-            "medication_id": medication_id
+            "medication_id": str(medication_id)
         }
 
     @http_post(
@@ -495,7 +552,7 @@ class NutritionAPIController:
         return 201, log
 
     @http_put(
-        'logs/{log_id}',
+        'logs/{log_id}/',
         response={200: NutritionLogOutputSchema, 404: ErrorResponseSchema}
     )
     def update_nutrition_log(self, request, log_id: int, payload: NutritionLogInputSchema):
@@ -514,7 +571,7 @@ class NutritionAPIController:
             }
 
     @http_delete(
-        'logs/{log_id}',
+        'logs/{log_id}/',
         response={200: dict, 404: ErrorResponseSchema}
     )
     def delete_nutrition_log(self, request, log_id: int):
@@ -588,3 +645,139 @@ class NutritionAPIController:
             'page_size': page_size,
             'has_next': has_next
         }
+
+
+# Weekly activity target recommended for adults/pregnancy (WHO: 150 min/week)
+EXERCISE_WEEKLY_GOAL = {'minutes': 150, 'calories': 500}
+SLEEP_GOAL_HOURS = 8.0
+
+
+def _exercise_log_out(log):
+    return {
+        'id': log.id,
+        'exercise_type_id': log.exercise_type_id,
+        'name': log.name,
+        'date': log.date,
+        'minutes': log.minutes,
+        'calories': log.calories,
+        'intensity': log.intensity,
+    }
+
+
+@api_controller("exercise/", tags=["Exercise"], permissions=[IsCustomer])
+class ExerciseAPIController:
+    """Workout logging with a weekly (Mon-Sun) summary."""
+
+    @http_get('types/', response=List[ExerciseTypeOutputSchema])
+    def list_exercise_types(self, request, category: str = '', q: str = ''):
+        """Exercise catalog, optionally filtered by category / search."""
+        qs = ExerciseType.objects.filter(is_active=True)
+        if category and category != 'All':
+            qs = qs.filter(category=category)
+        if q:
+            qs = qs.filter(name__icontains=q)
+        return list(qs)
+
+    @http_get('summary/{date}/', response=ExerciseWeekSummarySchema)
+    def week_summary(self, request, date: date_type):
+        """All workouts in the Mon-Sun week containing `date`, with totals."""
+        week_start = date - timedelta(days=date.weekday())
+        week_end = week_start + timedelta(days=6)
+        logs = list(ExerciseLog.objects.filter(
+            customer=request.user.customer,
+            date__range=(week_start, week_end),
+        ))
+        totals = {
+            'minutes': sum(log.minutes for log in logs),
+            'calories': sum(log.calories for log in logs),
+        }
+        goal = EXERCISE_WEEKLY_GOAL
+        return {
+            'week_start': week_start,
+            'week_end': week_end,
+            'logs': [_exercise_log_out(log) for log in logs],
+            'totals': totals,
+            'goal': goal,
+            'progress': {
+                key: min(100.0, round(totals[key] / goal[key] * 100, 1))
+                for key in goal
+            },
+        }
+
+    @http_post('logs/', response={201: ExerciseLogOutputSchema})
+    def create_log(self, request, payload: ExerciseLogInputSchema):
+        exercise_type = None
+        if payload.exercise_type_id:
+            exercise_type = ExerciseType.objects.filter(
+                id=payload.exercise_type_id).first()
+            if not exercise_type:
+                raise HttpError(404, "Exercise type not found")
+        name = payload.name or (exercise_type.name if exercise_type else None)
+        if not name:
+            raise HttpError(400, "Either exercise_type_id or name is required")
+        calories = payload.calories
+        if not calories and exercise_type:
+            calories = round(exercise_type.calories_per_minute * payload.minutes)
+        log = ExerciseLog.objects.create(
+            customer=request.user.customer,
+            exercise_type=exercise_type,
+            name=name,
+            date=payload.date,
+            minutes=payload.minutes,
+            calories=calories,
+            intensity=payload.intensity,
+        )
+        return 201, _exercise_log_out(log)
+
+    @http_delete('logs/{log_id}/', response={200: SuccessSchema})
+    def delete_log(self, request, log_id: int):
+        deleted, _ = ExerciseLog.objects.filter(
+            id=log_id, customer=request.user.customer).delete()
+        if not deleted:
+            raise HttpError(404, "Workout not found")
+        return {"detail": {"title": "Deleted", "message": "Workout removed"}}
+
+
+@api_controller("sleep/", tags=["Sleep"], permissions=[IsCustomer])
+class SleepAPIController:
+    """Nightly sleep log (one entry per date)."""
+
+    @http_get('logs/', response=SleepLogListSchema)
+    def list_logs(self, request, limit: int = 60):
+        customer = request.user.customer
+        limit = max(1, min(limit, 365))
+        entries = list(SleepLog.objects.filter(customer=customer)[:limit])
+        since = date_type.today() - timedelta(days=6)
+        recent = [e for e in entries if e.date >= since]
+        avg = (round(sum(float(e.duration_hours) for e in recent)
+                     / len(recent), 1) if recent else None)
+        return {
+            'entries': entries,
+            'stats': {
+                'average_hours_7d': avg,
+                'entries_7d': len(recent),
+                'goal_hours': SLEEP_GOAL_HOURS,
+            },
+        }
+
+    @http_post('logs/', response={200: SleepLogOutputSchema})
+    def upsert_log(self, request, payload: SleepLogInputSchema):
+        """Create the entry for `date`, or overwrite it if it exists."""
+        log, _ = SleepLog.objects.update_or_create(
+            customer=request.user.customer,
+            date=payload.date,
+            defaults={
+                'duration_hours': round(payload.duration_hours, 1),
+                'quality': payload.quality,
+            },
+        )
+        log.refresh_from_db()
+        return log
+
+    @http_delete('logs/{log_id}/', response={200: SuccessSchema})
+    def delete_log(self, request, log_id: int):
+        deleted, _ = SleepLog.objects.filter(
+            id=log_id, customer=request.user.customer).delete()
+        if not deleted:
+            raise HttpError(404, "Sleep entry not found")
+        return {"detail": {"title": "Deleted", "message": "Sleep entry removed"}}

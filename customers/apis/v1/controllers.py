@@ -1,5 +1,5 @@
-from datetime import date
-from typing import Optional
+from datetime import date, timedelta
+from typing import List, Optional
 from ninja.files import UploadedFile
 from django.db import transaction
 from accounts.apis.v1.permissions import IsCustomer
@@ -11,7 +11,8 @@ from customers.constants import (
     TimezoneChoices,
     DEFAULT_REMINDER_CHOICES,
 )
-from ninja_extra import api_controller, http_post, http_get, http_patch
+from ninja_extra import (
+    api_controller, http_post, http_get, http_patch, http_delete)
 from ninja import Form, File
 from ninja.errors import HttpError
 
@@ -26,12 +27,15 @@ from .schemas import (
     HealthAnalysisResponseSchema,
     ReminderInfoSchema,
     WeightEntryInSchema,
+    WeightEntryOutSchema,
     PreferencesUpdateSchema,
     PreferencesOptionsSchema,
     ReminderSettingsSchema,
     ReminderSettingsUpdateSchema,
     ReminderUpdateResponseSchema,
 )
+
+from periods.models import PeriodProfile
 
 
 @api_controller("customer/", tags=["Customer"], auth=None)
@@ -157,11 +161,14 @@ class CustomerAPIController:
         # Extract period profile fields
         period_fields = {}
         if 'cycle_length' in customer_dict:
-            period_fields['avg_cycle_length'] = customer_dict.pop('cycle_length')
+            period_fields['avg_cycle_length'] = customer_dict.pop(
+                'cycle_length')
         if 'period_length' in customer_dict:
-            period_fields['avg_period_length'] = customer_dict.pop('period_length')
+            period_fields['avg_period_length'] = customer_dict.pop(
+                'period_length')
         if 'luteal_phase' in customer_dict:
-            period_fields['luteal_phase_length'] = customer_dict.pop('luteal_phase')
+            period_fields['luteal_phase_length'] = customer_dict.pop(
+                'luteal_phase')
 
         # Extract user fields
         user_dict = customer_dict.pop("user", {})
@@ -180,7 +187,7 @@ class CustomerAPIController:
 
         # Update period profile if period fields are provided
         if period_fields:
-            from periods.models import PeriodProfile
+
             period_profile, _ = PeriodProfile.objects.get_or_create(
                 customer=customer
             )
@@ -223,6 +230,46 @@ class CustomerAPIController:
                 "message": "Profile updated successfully",
             },
         }
+
+    @http_get(
+        "weight-entries/",
+        response={200: List[WeightEntryOutSchema]},
+    )
+    def weight_entries(self, request, months: int = 6):
+        """
+        Customer weight history (oldest first) for the last `months` months.
+        `weight_kg` is normalised so entries in different units can be charted.
+        """
+        months = max(1, min(months, 60))
+        since = date.today() - timedelta(days=months * 31)
+        entries = WeightEntry.objects.filter(
+            customer=request.user.customer,
+            is_deleted=False,
+            entry_date__gte=since,
+        ).order_by('entry_date', 'time_stamp')
+        return [
+            {
+                "id": e.id,
+                "weight": float(e.weight),
+                "unit": e.unit,
+                "weight_kg": round(
+                    float(e.weight) * (0.453592 if e.unit == "lb" else 1), 2),
+                "entry_date": e.entry_date,
+            }
+            for e in entries
+        ]
+
+    @http_delete(
+        "weight-entries/{entry_id}/",
+        response={200: SuccessSchema},
+    )
+    def delete_weight_entry(self, request, entry_id: int):
+        deleted, _ = WeightEntry.objects.filter(
+            id=entry_id, customer=request.user.customer).delete()
+        if not deleted:
+            raise HttpError(404, "Weight entry not found")
+        return {"detail": {
+            "title": "Deleted", "message": "Weight entry deleted"}}
 
     @http_get(
         "health-analysis/",

@@ -11,10 +11,9 @@ class RequestMiddleware:
         # Code to be executed for each request before
         # the view (and later middleware) are called.
         self.thread_local.current_request = request
-
-        response = self.get_response(request)
-
-        # Code to be executed for each request/response after
-        # the view is called.
-
-        return response
+        try:
+            return self.get_response(request)
+        finally:
+            # Don't leak this request into later work on the same thread
+            # (BaseModel.save() reads it to stamp creator/updater).
+            self.thread_local.current_request = None

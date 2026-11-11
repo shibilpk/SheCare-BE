@@ -1,10 +1,13 @@
 from accounts.apis.v1.permissions import IsCustomer
-from ninja_extra import api_controller, http_get, http_post, http_put, paginate, route
+from uuid import UUID
+from ninja_extra import (
+    api_controller, http_get, http_post, http_put, http_delete, paginate, route)
 from ninja.errors import HttpError
 from ninja_extra.pagination import PageNumberPaginationExtra, PaginatedResponseSchema
 from periods.models import Period
 from periods.services import get_current_period_status
 from datetime import datetime, timedelta
+from general.apis.v1.schemas import SuccessSchema
 from django.utils import timezone
 from .schemas import (
     CurrentPeriodSchema,
@@ -13,6 +16,7 @@ from .schemas import (
     PeriodOutSchema,
     PeriodStartSchema,
     PeriodEndSchema,
+    PeriodUpdateSchema,
     PregnancyChanceSchema,
 )
 
@@ -134,3 +138,67 @@ class PeriodAPIController:
         # Get pregnancy chance with percentage
         chance_data = profile.get_pregnancy_chance_with_percentage()
         return chance_data
+
+    def _get_owned_period(self, request, period_id):
+        try:
+            return Period.objects.get(
+                id=period_id, customer=request.user.customer)
+        except Period.DoesNotExist:
+            raise HttpError(404, "Period not found")
+
+    @staticmethod
+    def _refresh_next_cycle_length(customer, after_start):
+        """Recompute cycle_length of the period following `after_start`."""
+        next_period = Period.objects.filter(
+            customer=customer, start_date__gt=after_start
+        ).order_by('start_date').first()
+        if next_period:
+            next_period.cycle_length = None
+            next_period.save()
+
+    @http_put(
+        "{period_id}/",
+        response={200: PeriodOutSchema},
+    )
+    def update_period(self, request, period_id: UUID, data: PeriodUpdateSchema):
+        """Edit the start/end dates of any of the customer's periods."""
+        if data.end_date < data.start_date:
+            raise HttpError(400, "End date cannot be before start date")
+        period_entry = self._get_owned_period(request, period_id)
+        customer = period_entry.customer
+        old_start = period_entry.start_date
+
+        overlap = Period.objects.filter(
+            customer=customer,
+            start_date__date__lte=data.end_date,
+            end_date__date__gte=data.start_date,
+        ).exclude(id=period_entry.id).exists()
+        if overlap:
+            raise HttpError(400, "These dates overlap another period")
+
+        period_entry.start_date = datetime.combine(
+            data.start_date, datetime.min.time())
+        period_entry.end_date = datetime.combine(
+            data.end_date, datetime.min.time())
+        period_entry.cycle_length = None  # recalculated in save()
+        period_entry.save()
+
+        self._refresh_next_cycle_length(customer, old_start)
+        self._refresh_next_cycle_length(customer, period_entry.start_date)
+        return period_entry
+
+    @http_delete(
+        "{period_id}/",
+        response={200: SuccessSchema},
+    )
+    def delete_period(self, request, period_id: UUID):
+        """Permanently delete one of the customer's periods."""
+        period_entry = self._get_owned_period(request, period_id)
+        customer = period_entry.customer
+        start = period_entry.start_date
+        period_entry.delete(hard=True)
+        self._refresh_next_cycle_length(customer, start)
+        return {"detail": {
+            "title": "Deleted",
+            "message": "Period deleted successfully",
+        }}

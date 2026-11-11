@@ -7,6 +7,8 @@ from django.utils import timezone
 from django.db import transaction
 
 from activities.models import Medication, MedicationLog
+from customers.models import DailyEntry, DiaryEntry
+from pregnancies.models import Pregnancy
 
 
 class MedicationService:
@@ -14,7 +16,7 @@ class MedicationService:
 
     @staticmethod
     def get_medication_by_id(
-        medication_id: int, customer
+        medication_id, customer
     ) -> Optional[Medication]:
         """Get a specific medication for a customer"""
         try:
@@ -172,3 +174,58 @@ class MedicationService:
             'taken_doses': taken_doses,
             'completion_percent': round(completion_percent, 2)
         }
+
+
+class CalendarMarkerService:
+    """Collects the dates to mark on the calendar for a date range"""
+
+    @classmethod
+    def get_markers(cls, customer, start_date: date, end_date: date) -> Dict[str, List[date]]:
+        markers = cls._period_markers(customer, start_date, end_date)
+        markers['pregnant'] = cls._pregnant_dates(customer, start_date, end_date)
+        markers['medication'] = cls._medication_dates(customer, start_date, end_date)
+        markers['love'] = cls._intimacy_dates(customer, start_date, end_date)
+        markers['diary'] = cls._diary_dates(customer, start_date, end_date)
+        return markers
+
+    @staticmethod
+    def _period_markers(customer, start_date, end_date):
+        profile = getattr(customer, 'period_profile', None)
+        if profile is None:
+            return {
+                'period': [], 'future_period': [],
+                'ovulation': [], 'fertile': []}
+        return profile.get_cycle_markers(start_date, end_date)
+
+    @staticmethod
+    def _pregnant_dates(customer, start_date, end_date):
+        """Due dates of active pregnancies falling in the range"""
+        return list(
+            Pregnancy.objects.filter(
+                customer=customer, is_active=True,
+                due_date__range=(start_date, end_date),
+            ).values_list('due_date', flat=True))
+
+    @staticmethod
+    def _medication_dates(customer, start_date, end_date):
+        """Days on which at least one medication dose was taken"""
+        return sorted(set(
+            MedicationLog.objects.filter(
+                medication__customer=customer, taken=True,
+                date__range=(start_date, end_date),
+            ).values_list('date', flat=True)))
+
+    @staticmethod
+    def _intimacy_dates(customer, start_date, end_date):
+        """Days with an intimacy entry"""
+        entries = DailyEntry.objects.filter(
+            customer=customer, date__range=(start_date, end_date),
+        ).values_list('date', 'intimacy')
+        return sorted(day for day, intimacy in entries if intimacy)
+
+    @staticmethod
+    def _diary_dates(customer, start_date, end_date):
+        return sorted(set(
+            DiaryEntry.objects.filter(
+                customer=customer, entry_date__range=(start_date, end_date),
+            ).values_list('entry_date', flat=True)))

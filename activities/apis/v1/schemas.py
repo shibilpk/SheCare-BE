@@ -1,29 +1,43 @@
 from datetime import datetime, date
 from ninja import Schema, ModelSchema, Field
-from typing import List, Dict, Optional
+from typing import List, Dict, Literal, Optional
 from uuid import UUID
 from pydantic import validator
 from activities.models import Medication, MedicationLog
 
 
-class DailyDataItemSchema(Schema):
-    id: str
-    type: str  # 'mood', 'symptom', 'activity', 'flow', 'intimacy'
-
-
 class DailyEntryInputSchema(Schema):
     date: date
-    daily_data: List[DailyDataItemSchema] = []
+    moods: List[str] = []
+    symptoms: List[str] = []
+    activities: List[str] = []
+    intimacy: List[str] = []
+    flow: List[str] = []
     ratings: List[Dict] = []
 
 
 class DailyEntryOutputSchema(Schema):
     id: UUID
     date: date
-    daily_data: List[Dict]
+    moods: List[str]
+    symptoms: List[str]
+    activities: List[str]
+    intimacy: List[str]
+    flow: List[str]
     ratings: List[Dict]
     created_at: datetime
     updated_at: Optional[datetime]
+
+
+class CalendarMarkersOutputSchema(Schema):
+    period: List[date] = []
+    future_period: List[date] = []
+    ovulation: List[date] = []
+    fertile: List[date] = []
+    pregnant: List[date] = []
+    medication: List[date] = []
+    love: List[date] = []
+    diary: List[date] = []
 
 
 # Hydration Schemas
@@ -213,3 +227,74 @@ class FoodSearchResultSchema(Schema):
     page: int
     page_size: int
     has_next: bool
+
+
+# Exercise Schemas
+class ExerciseTypeOutputSchema(Schema):
+    id: int
+    name: str
+    category: str
+    calories_per_minute: float
+
+
+class ExerciseLogInputSchema(Schema):
+    exercise_type_id: Optional[int] = None
+    name: Optional[str] = Field(default=None, max_length=100)
+    date: date
+    minutes: int = Field(..., ge=1, le=1440)
+    calories: int = Field(default=0, ge=0)
+    intensity: Literal['Low', 'Moderate', 'High'] = 'Low'
+
+
+class ExerciseLogOutputSchema(Schema):
+    id: int
+    exercise_type_id: Optional[int] = None
+    name: str
+    date: date
+    minutes: int
+    calories: int
+    intensity: str
+
+
+class ExerciseTotalsSchema(Schema):
+    minutes: int
+    calories: int
+
+
+class ExerciseProgressSchema(Schema):
+    minutes: float
+    calories: float
+
+
+class ExerciseWeekSummarySchema(Schema):
+    week_start: date
+    week_end: date
+    logs: List[ExerciseLogOutputSchema]
+    totals: ExerciseTotalsSchema
+    goal: ExerciseTotalsSchema
+    progress: ExerciseProgressSchema
+
+
+# Sleep Schemas
+class SleepLogInputSchema(Schema):
+    date: date
+    duration_hours: float = Field(..., gt=0, le=24)
+    quality: Literal['Poor', 'Fair', 'Good', 'Excellent'] = 'Good'
+
+
+class SleepLogOutputSchema(Schema):
+    id: int
+    date: date
+    duration_hours: float
+    quality: str
+
+
+class SleepStatsSchema(Schema):
+    average_hours_7d: Optional[float] = None
+    entries_7d: int
+    goal_hours: float
+
+
+class SleepLogListSchema(Schema):
+    entries: List[SleepLogOutputSchema]
+    stats: SleepStatsSchema

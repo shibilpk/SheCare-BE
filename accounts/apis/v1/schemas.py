@@ -96,3 +96,33 @@ class VerifyOTPSchema(Schema):
     otp: str = Field(..., min_length=4, max_length=6)
     # is_registration defaults to False
     is_login: bool = False
+
+
+class SendOTPSchema(Schema, CustomMessageStr400Mixin):
+    email: EmailStr
+    _LOGIN_ERROR_MESSAGES: ClassVar[dict] = {
+        'missing': {'email': 'Email is required.'}
+    }
+
+
+class LoginOTPSchema(Schema, CustomMessageStr400Mixin):
+    email: EmailStr
+    otp: str = Field(..., min_length=4, max_length=6)
+    _LOGIN_ERROR_MESSAGES: ClassVar[dict] = {
+        'missing': {
+            'email': 'Email is required.',
+            'otp': 'OTP is required.',
+        }
+    }
+
+
+class ChangePasswordSchema(Schema, CustomMessageStr400Mixin):
+    current_password: str
+    new_password: str = Field(..., min_length=8)
+    _LOGIN_ERROR_MESSAGES: ClassVar[dict] = {
+        'missing': {
+            'current_password': 'Current password is required.',
+            'new_password': 'New password is required.',
+        }
+    }
+

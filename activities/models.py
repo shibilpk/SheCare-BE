@@ -225,3 +225,81 @@ class FoodSuggestion(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.calories} cal)"
+
+
+class ExerciseType(models.Model):
+    """Catalog of exercises the user can pick from (admin managed)."""
+    CATEGORY_CHOICES = [
+        ('Cardio', 'Cardio'),
+        ('Strength', 'Strength'),
+        ('Flexibility', 'Flexibility'),
+        ('Sports', 'Sports'),
+    ]
+    name = models.CharField(max_length=100, unique=True)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
+    calories_per_minute = models.FloatField(
+        default=5, help_text="Rough estimate used to pre-fill calories")
+    is_active = models.BooleanField(default=True)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['order', 'name']
+
+    def __str__(self):
+        return f"{self.name} ({self.category})"
+
+
+class ExerciseLog(models.Model):
+    """A workout a customer did on a given date."""
+    INTENSITY_CHOICES = [
+        ('Low', 'Low'),
+        ('Moderate', 'Moderate'),
+        ('High', 'High'),
+    ]
+    customer = models.ForeignKey(
+        'customers.Customer', on_delete=models.CASCADE,
+        related_name='exercise_logs')
+    exercise_type = models.ForeignKey(
+        ExerciseType, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='logs')
+    name = models.CharField(max_length=100)
+    date = models.DateField(db_index=True)
+    minutes = models.PositiveIntegerField()
+    calories = models.PositiveIntegerField(default=0)
+    intensity = models.CharField(
+        max_length=10, choices=INTENSITY_CHOICES, default='Low')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-date', '-created_at']
+        indexes = [models.Index(fields=['customer', 'date'])]
+
+    def __str__(self):
+        return f"{self.customer} - {self.date} - {self.name} ({self.minutes} min)"
+
+
+class SleepLog(models.Model):
+    """Hours slept on a given night (one entry per date)."""
+    QUALITY_CHOICES = [
+        ('Poor', 'Poor'),
+        ('Fair', 'Fair'),
+        ('Good', 'Good'),
+        ('Excellent', 'Excellent'),
+    ]
+    customer = models.ForeignKey(
+        'customers.Customer', on_delete=models.CASCADE,
+        related_name='sleep_logs')
+    date = models.DateField(db_index=True)
+    duration_hours = models.DecimalField(max_digits=4, decimal_places=1)
+    quality = models.CharField(
+        max_length=10, choices=QUALITY_CHOICES, default='Good')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('customer', 'date')
+        ordering = ['-date']
+
+    def __str__(self):
+        return f"{self.customer} - {self.date} - {self.duration_hours}h"

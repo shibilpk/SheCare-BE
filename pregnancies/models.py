@@ -130,9 +130,77 @@ class Pregnancy(BaseModel):
         return cls.objects.filter(
             customer=customer,
             is_active=True,
+            is_deleted=False,
             baby_born=False,
             pregnancy_lost=False,
             mistaken_toggle=False
         ).first()
 
 
+
+
+class Appointment(models.Model):
+    """A doctor visit / scan / test the customer has scheduled."""
+    customer = models.ForeignKey(
+        'customers.Customer', on_delete=models.CASCADE,
+        related_name='appointments')
+    title = models.CharField(max_length=150)
+    doctor = models.CharField(max_length=150, blank=True, default='')
+    location = models.CharField(max_length=200, blank=True, default='')
+    date = models.DateField(db_index=True)
+    time = models.TimeField(null=True, blank=True)
+    notes = models.TextField(blank=True, default='')
+    icon = models.CharField(max_length=50, default='stethoscope')
+    color = models.CharField(max_length=7, default='#8B5CF6')
+    is_completed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['date', 'time']
+        indexes = [models.Index(fields=['customer', 'date'])]
+
+    def __str__(self):
+        return f"{self.customer} - {self.title} on {self.date}"
+
+
+class ChecklistItem(models.Model):
+    """Hospital bag checklist item. Defaults are seeded per customer."""
+    CATEGORY_CHOICES = [
+        ('mom', "Mom's Essentials"),
+        ('baby', "Baby's Essentials"),
+        ('other', 'Other Items'),
+    ]
+    customer = models.ForeignKey(
+        'customers.Customer', on_delete=models.CASCADE,
+        related_name='checklist_items')
+    category = models.CharField(max_length=10, choices=CATEGORY_CHOICES)
+    label = models.CharField(max_length=150)
+    checked = models.BooleanField(default=False)
+    is_custom = models.BooleanField(
+        default=False, help_text="Added by the user (can be deleted)")
+    order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['category', 'order', 'id']
+
+    def __str__(self):
+        return f"{self.customer} - {self.label}"
+
+
+class ChildWeightEntry(models.Model):
+    """Baby/child weight measurement."""
+    customer = models.ForeignKey(
+        'customers.Customer', on_delete=models.CASCADE,
+        related_name='child_weight_entries')
+    entry_date = models.DateField()
+    age_months = models.PositiveIntegerField()
+    weight_kg = models.DecimalField(max_digits=5, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['entry_date', 'created_at']
+
+    def __str__(self):
+        return f"{self.customer} - {self.weight_kg}kg at {self.age_months}m"

@@ -57,6 +57,10 @@ class Customer(BaseModel, CrudUrlMixin):
         default=TimezoneChoices.ASIA_KOLKATA,
         help_text="User's timezone"
     )
+    deactivated_at = models.DateTimeField(
+        blank=True, null=True,
+        help_text="Set when the customer deactivates their account"
+    )
 
     class Crud:
         url_base_name = "customer"
@@ -209,7 +213,12 @@ class DailyEntry(BaseModel):
     customer = models.ForeignKey(
         'customers.Customer', on_delete=models.CASCADE, null=True)
     date = models.DateField()
-    daily_data = models.JSONField(default=list, blank=True)
+    # Selected option ids per category
+    moods = models.JSONField(default=list, blank=True)
+    symptoms = models.JSONField(default=list, blank=True)
+    activities = models.JSONField(default=list, blank=True)
+    intimacy = models.JSONField(default=list, blank=True)
+    flow = models.JSONField(default=list, blank=True)
     ratings = models.JSONField(default=list, blank=True)
 
     class Meta:

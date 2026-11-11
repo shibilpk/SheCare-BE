@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     AppVersion, AppAdminSettings, DailyTip, BlogPost,
-    StaticContent, ContactUs, Feedback
+    StaticContent, ContactUs, Feedback, HealthTip
 )
 
 
@@ -85,3 +85,11 @@ class FeedbackAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         })
     )
+
+
+@admin.register(HealthTip)
+class HealthTipAdmin(admin.ModelAdmin):
+    list_display = ('title', 'category', 'order', 'is_active')
+    list_filter = ('is_active', 'category')
+    list_editable = ('order', 'is_active')
+    search_fields = ('title', 'description')

@@ -100,6 +100,14 @@ class CustomerProfileUpdateOutSchema(Schema):
     detail: DetailsSuccessSchema
 
 
+class WeightEntryOutSchema(Schema):
+    id: int
+    weight: float
+    unit: Optional[str] = None
+    weight_kg: float
+    entry_date: date
+
+
 class WeightEntryInSchema(Schema):
     weight: Decimal = Field(
         ...,

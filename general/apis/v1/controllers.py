@@ -12,10 +12,14 @@ from general.apis.v1.schemas import (
     ContactUsOutSchema,
     FeedbackInSchema,
     FeedbackOutSchema,
-    BlogPostSchema
+    BlogPostSchema,
+    HealthTipSchema,
 )
 from general.constants import OSTypeEnum, StaticContentTypeEnum
-from general.models import AppVersion, BlogPost, DailyTip, StaticContent, ContactUs, Feedback
+from typing import List
+from general.models import (
+    AppVersion, BlogPost, DailyTip, HealthTip, StaticContent, ContactUs,
+    Feedback)
 
 
 @api_controller('general/', tags=['General'])
@@ -47,6 +51,14 @@ class GeneralAPIController:
             }
         except AppVersion.DoesNotExist:
             raise HttpError(404, "App version not found")
+
+    @http_get(
+        'health-tips/',
+        response={200: List[HealthTipSchema]},
+    )
+    def health_tips(self, request):
+        """General wellness tips (managed from the admin)."""
+        return list(HealthTip.objects.filter(is_active=True))
 
     @http_get(
         'daily-tips/',

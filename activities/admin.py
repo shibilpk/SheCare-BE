@@ -1,7 +1,8 @@
 from django.contrib import admin
 from activities.models import (
     HydrationLog, HydrationContent, Medication, MedicationLog,
-    NutritionLog, NutritionGoal, FoodSuggestion
+    NutritionLog, NutritionGoal, FoodSuggestion,
+    ExerciseType, ExerciseLog, SleepLog
 )
 
 # Register your models here.
@@ -65,3 +66,25 @@ class FoodSuggestionAdmin(admin.ModelAdmin):
     search_fields = ('name',)
     ordering = ('-usage_count', 'name')
     list_editable = ('is_active',)
+
+
+@admin.register(ExerciseType)
+class ExerciseTypeAdmin(admin.ModelAdmin):
+    list_display = ('name', 'category', 'calories_per_minute', 'order', 'is_active')
+    list_filter = ('category', 'is_active')
+    list_editable = ('order', 'is_active')
+    search_fields = ('name',)
+
+
+@admin.register(ExerciseLog)
+class ExerciseLogAdmin(admin.ModelAdmin):
+    list_display = ('customer', 'date', 'name', 'minutes', 'calories', 'intensity')
+    list_filter = ('date', 'intensity')
+    search_fields = ('customer__user__email', 'name')
+
+
+@admin.register(SleepLog)
+class SleepLogAdmin(admin.ModelAdmin):
+    list_display = ('customer', 'date', 'duration_hours', 'quality')
+    list_filter = ('date', 'quality')
+    search_fields = ('customer__user__email',)

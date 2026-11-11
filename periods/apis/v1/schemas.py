@@ -28,6 +28,11 @@ class PeriodEndSchema(Schema):
     end_date: date
 
 
+class PeriodUpdateSchema(Schema):
+    start_date: date
+    end_date: date
+
+
 class PeriodDetailedOutSchema(Schema):
     id: UUID
     start_date: datetime
@@ -39,6 +44,9 @@ class PregnancyChanceSchema(Schema):
     """Schema for pregnancy chance with percentage"""
     level: str  # 'low', 'medium', or 'high'
     percentage: int  # 0-100
+    is_ovulation_day: bool = False
+    is_fertile_window: bool = False
+    ovulation_date: date | None = None
 
 
 class CurrentPeriodSchema(Schema):

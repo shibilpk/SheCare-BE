@@ -77,3 +77,12 @@ class BlogPostSchema(ModelSchema):
     class Meta:
         model = BlogPost
         fields = ['id', 'title', 'short_description', 'content', 'author', 'published_date', 'created_at']
+
+
+class HealthTipSchema(Schema):
+    id: int
+    category: str
+    title: str
+    description: str
+    icon: str
+    color: str

@@ -1,5 +1,6 @@
 from .controllers import (
-    AuthAPIController)
+    AuthAPIController, OTPAuthAPIController, AccountAPIController)
 
 # This list makes it easy for the central API to find them
-register_controllers = [AuthAPIController]
+register_controllers = [
+    AuthAPIController, OTPAuthAPIController, AccountAPIController]

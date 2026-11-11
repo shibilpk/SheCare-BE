@@ -1,7 +1,11 @@
 from django.conf import settings
 from django.contrib.auth import authenticate
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
+from django.utils import timezone
 from ninja.errors import HttpError
-from ninja_extra import api_controller, http_post
+from ninja_extra import api_controller, http_post, http_delete
 from ninja_jwt.tokens import RefreshToken
 from ninja.responses import Response
 from core.exceptions import ApiError
@@ -10,11 +14,13 @@ from starlette import status
 from accounts.models import User, UserOtp
 from core.helpers import decrypt_small
 
+from accounts.apis.v1.permissions import IsCustomer
 from accounts.apis.v1.schemas import (
+    ChangePasswordSchema, LoginOTPSchema, SendOTPSchema,
     EmailSchema, LoginSchema, RefreshTokenResponseSchema,
     RefreshTokenSchema, TokenResponseSchema, UserExistsResponseSchema, VerifyOTPSchema,
     VerifyTokenResponseSchema)
-from general.apis.v1.schemas import ErrorSchema
+from general.apis.v1.schemas import ErrorSchema, SuccessSchema
 
 
 @api_controller('auth/', tags=['Authentication'])
@@ -52,30 +58,8 @@ class AuthAPIController:
         if not user.is_active:
             raise HttpError(401, "User account is disabled")
 
-        # Generate tokens
-        refresh = RefreshToken.for_user(user)
-
-        user_data = {
-            "id": user.id,
-            "email": user.email,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "phone": str(user.phone) if user.phone else None,
-        }
-
-        # Add customer_id if customer profile exists
-        if hasattr(user, 'customer'):
-            user_data["customer_id"] = user.customer.id
-
-        return {
-            "access": str(refresh.access_token),
-            "refresh": str(refresh),
-            "user": user_data,
-            "detail": {
-                "title": "Success",
-                "message": "Login successful"
-            }
-        }
+        reactivate_customer(user)
+        return build_token_response(user, "Login successful")
 
     @http_post(
         'verify-otp/{str:user_id}/',
@@ -221,3 +205,153 @@ class AuthAPIController:
         return {
             "exists": True
         }
+
+
+def build_token_response(user, message):
+    """Issue JWT tokens for a user in the shape the app expects."""
+    refresh = RefreshToken.for_user(user)
+    user_data = {
+        "id": user.id,
+        "email": user.email,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "phone": str(user.phone) if user.phone else None,
+    }
+    if hasattr(user, 'customer'):
+        user_data["customer_id"] = user.customer.id
+    return {
+        "access": str(refresh.access_token),
+        "refresh": str(refresh),
+        "user": user_data,
+        "detail": {"title": "Success", "message": message},
+    }
+
+
+def reactivate_customer(user):
+    """Logging back in restores a deactivated account."""
+    customer = getattr(user, 'customer', None)
+    if customer and customer.deactivated_at:
+        customer.deactivated_at = None
+        customer.save(update_fields=['deactivated_at'])
+
+
+@api_controller('auth/', tags=['Authentication'])
+class OTPAuthAPIController:
+    """Passwordless (email OTP) login."""
+
+    @http_post('send-otp/', response={200: SuccessSchema}, auth=None)
+    def send_otp(self, request, payload: SendOTPSchema):
+        """
+        Send an OTP to the email. Works both for active users (OTP login)
+        and for users still verifying their registration (resend OTP).
+        """
+        email = payload.email.lower().strip()
+        if not User.objects.filter(email__iexact=email).exists():
+            raise ApiError(
+                title="Account not found",
+                message="No account exists with this email.",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+        try:
+            UserOtp.create_email_otp(email)
+        except DjangoValidationError as e:
+            raise ApiError(
+                title="Too many attempts",
+                message=" ".join(e.messages),
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        return {"detail": {
+            "title": "OTP sent",
+            "message": "An OTP has been sent to your email.",
+        }}
+
+    @http_post('login-otp/', response={200: TokenResponseSchema}, auth=None)
+    def login_with_otp(self, request, payload: LoginOTPSchema):
+        """Verify an emailed OTP and log the (active) user in."""
+        email = payload.email.lower().strip()
+        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        user_otp = UserOtp.objects.filter(
+            email__iexact=email, is_active=True).first()
+        if not user or not user_otp:
+            raise ApiError(
+                title="Verification failed",
+                message="No active OTP found. Please request a new one.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if user_otp.otp != payload.otp:
+            user_otp.failed_attempts += 1
+            if user_otp.failed_attempts >= 3:
+                user_otp.is_active = False
+            user_otp.save()
+            raise ApiError(
+                title="Verification failed",
+                message=(
+                    "Maximum OTP verification attempts exceeded"
+                    if not user_otp.is_active else "Invalid OTP"),
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user_otp.is_active = False
+        user_otp.save()
+        reactivate_customer(user)
+        return build_token_response(user, "Login successful")
+
+
+@api_controller('auth/', tags=['Authentication'], permissions=[IsCustomer])
+class AccountAPIController:
+    """Authenticated account management."""
+
+    @http_post('change-password/', response={200: SuccessSchema})
+    def change_password(self, request, payload: ChangePasswordSchema):
+        user = request.user
+        if not user.check_password(payload.current_password):
+            raise ApiError(
+                title="Incorrect password",
+                message="Your current password is incorrect.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        if payload.current_password == payload.new_password:
+            raise ApiError(
+                title="Invalid password",
+                message="New password must be different from the current one.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            validate_password(payload.new_password, user)
+        except DjangoValidationError as e:
+            raise ApiError(
+                title="Invalid password",
+                message=" ".join(e.messages),
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        user.set_password(payload.new_password)
+        user.save(update_fields=['password'])
+        return {"detail": {
+            "title": "Success",
+            "message": "Password changed successfully",
+        }}
+
+    @http_post('deactivate-account/', response={200: SuccessSchema})
+    def deactivate_account(self, request):
+        """Temporarily deactivate; logging in again restores the account."""
+        customer = request.user.customer
+        customer.deactivated_at = timezone.now()
+        customer.save(update_fields=['deactivated_at'])
+        return {"detail": {
+            "title": "Account deactivated",
+            "message": (
+                "Your account has been deactivated. "
+                "Log in again anytime to restore it."),
+        }}
+
+    @http_delete('delete-account/', response={200: SuccessSchema})
+    def delete_account(self, request):
+        """Permanently delete the user and all of their data."""
+        with transaction.atomic():
+            UserOtp.objects.filter(email__iexact=request.user.email).delete()
+            request.user.delete()
+        return {"detail": {
+            "title": "Account deleted",
+            "message": "Your account has been permanently deleted.",
+        }}
